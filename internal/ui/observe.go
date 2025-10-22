@@ -55,6 +55,9 @@ type observeTab struct {
 	// Panel navigation
 	panelFocus     panelFocus
 	rightPanelView rightPanelView
+
+	// Scrolling for right panel
+	scrollOffset int
 }
 
 func newObserveTab(client middleware.Client) *observeTab {
@@ -151,20 +154,38 @@ func (o *observeTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "left", "h":
-			// Move focus to table
-			o.panelFocus = focusTable
+			if o.panelFocus == focusTable {
+				// Already on left, do nothing
+			} else {
+				// Cycle left through right panel views
+				if o.rightPanelView > 0 {
+					o.rightPanelView--
+					o.scrollOffset = 0 // Reset scroll when changing views
+				} else {
+					// Go back to table when pressing left on Details
+					o.panelFocus = focusTable
+				}
+			}
 		case "right", "l":
-			// Move focus to right panel
-			o.panelFocus = focusRightPanel
+			if o.panelFocus == focusTable {
+				// Move focus to right panel
+				o.panelFocus = focusRightPanel
+			} else {
+				// Cycle right through right panel views
+				if o.rightPanelView < rightPanelStats {
+					o.rightPanelView++
+					o.scrollOffset = 0 // Reset scroll when changing views
+				}
+			}
 		case "up", "k":
 			if o.panelFocus == focusTable {
 				if o.selectedIndex > 0 {
 					o.selectedIndex--
 				}
 			} else {
-				// Cycle through right panel views
-				if o.rightPanelView > 0 {
-					o.rightPanelView--
+				// Scroll up in right panel
+				if o.scrollOffset > 0 {
+					o.scrollOffset--
 				}
 			}
 		case "down", "j":
@@ -174,10 +195,8 @@ func (o *observeTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					o.selectedIndex++
 				}
 			} else {
-				// Cycle through right panel views
-				if o.rightPanelView < rightPanelStats {
-					o.rightPanelView++
-				}
+				// Scroll down in right panel
+				o.scrollOffset++
 			}
 		case "enter":
 			// Drill down into environment (only when table focused)
@@ -369,11 +388,12 @@ func (o *observeTab) View() string {
 	}
 
 	// Right panel
-	rightPanelContent := o.renderRightPanel()
+	rightPanelHeight := o.height - 10
+	rightPanelContent := o.renderRightPanel(rightPanelHeight)
 
-	// Calculate widths for two-panel layout
-	tableWidth := (o.width * 6) / 10  // 60% for table
-	rightWidth := o.width - tableWidth // 40% for right panel
+	// Calculate widths for two-panel layout (50/50 split)
+	tableWidth := o.width / 2         // 50% for table
+	rightWidth := o.width - tableWidth // 50% for right panel
 
 	// Reuse cyan color for highlights
 	dimColor := lipgloss.Color("240")  // Dim gray
@@ -410,9 +430,9 @@ func (o *observeTab) View() string {
 	// Help text
 	var helpText string
 	if o.panelFocus == focusTable {
-		helpText = "[←→/hl] Switch Panel  [e/p/d] Views  [Enter] Drill-down  [↑↓/jk] Navigate  [1-4] Right Panel  [r] Refresh  [q] Quit"
+		helpText = "[→/l] Right Panel  [e/p/d] Views  [Enter] Drill-down  [↑↓/jk] Navigate  [1-4] Quick Switch  [r] Refresh  [q] Quit"
 	} else {
-		helpText = "[←→/hl] Switch Panel  [↑↓/jk] Cycle Views  [1] Details  [2] Logs  [3] Events  [4] Stats  [q] Quit"
+		helpText = "[←/h] Back  [→←/hl] Cycle Views  [↑↓/jk] Scroll  [1] Details  [2] Logs  [3] Events  [4] Stats  [q] Quit"
 	}
 	help := helpStyle.Render(helpText)
 
@@ -587,17 +607,40 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-func (o *observeTab) renderRightPanel() string {
-	var panelName string
-	switch o.rightPanelView {
-	case rightPanelDetails:
-		panelName = "Details"
-	case rightPanelLogs:
-		panelName = "Logs"
-	case rightPanelEvents:
-		panelName = "Events"
-	case rightPanelStats:
-		panelName = "Stats"
+func (o *observeTab) renderRightPanel(height int) string {
+	// View list items
+	views := []struct {
+		name string
+		view rightPanelView
+	}{
+		{"Details", rightPanelDetails},
+		{"Logs", rightPanelLogs},
+		{"Events", rightPanelEvents},
+		{"Stats", rightPanelStats},
+	}
+
+	// Styles for view list
+	viewItemStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Padding(0, 1)
+
+	selectedViewStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")).
+		Background(lipgloss.Color("86")).
+		Bold(true).
+		Padding(0, 1)
+
+	// Build view list
+	var viewList strings.Builder
+	for i, view := range views {
+		style := viewItemStyle
+		if view.view == o.rightPanelView {
+			style = selectedViewStyle
+		}
+		viewList.WriteString(style.Render(view.name))
+		if i < len(views)-1 {
+			viewList.WriteString(" ")
+		}
 	}
 
 	// Use cyan for title when panel is focused
@@ -611,20 +654,69 @@ func (o *observeTab) renderRightPanel() string {
 		Foreground(titleColor).
 		Padding(0, 0, 1, 0)
 
+	separatorStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240"))
+
 	var content strings.Builder
+
+	// Add view list
+	content.WriteString(viewList.String())
+	content.WriteString("\n")
+	content.WriteString(separatorStyle.Render(strings.Repeat("─", 80)))
+	content.WriteString("\n\n")
+
+	// Add the current view name
+	var panelName string
+	switch o.rightPanelView {
+	case rightPanelDetails:
+		panelName = "Details"
+	case rightPanelLogs:
+		panelName = "Logs"
+	case rightPanelEvents:
+		panelName = "Events"
+	case rightPanelStats:
+		panelName = "Stats"
+	}
+
 	content.WriteString(titleStyle.Render(panelName))
 	content.WriteString("\n")
 
+	// Get the view content
+	var viewContent string
 	switch o.rightPanelView {
 	case rightPanelDetails:
-		content.WriteString(o.renderDetailsView())
+		viewContent = o.renderDetailsView()
 	case rightPanelLogs:
-		content.WriteString(o.renderLogsView())
+		viewContent = o.renderLogsView()
 	case rightPanelEvents:
-		content.WriteString(o.renderEventsView())
+		viewContent = o.renderEventsView()
 	case rightPanelStats:
-		content.WriteString(o.renderStatsView())
+		viewContent = o.renderStatsView()
 	}
+
+	// Apply scrolling
+	lines := strings.Split(viewContent, "\n")
+
+	// Calculate available height for content (subtract view list, separator, title)
+	availableHeight := height - 5
+
+	// Ensure scroll offset is within bounds
+	maxOffset := len(lines) - availableHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if o.scrollOffset > maxOffset {
+		o.scrollOffset = maxOffset
+	}
+
+	// Get the visible lines
+	endLine := o.scrollOffset + availableHeight
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	visibleLines := lines[o.scrollOffset:endLine]
+	content.WriteString(strings.Join(visibleLines, "\n"))
 
 	return content.String()
 }

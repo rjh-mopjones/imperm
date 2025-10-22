@@ -104,7 +104,7 @@ func (m *Model) View() string {
 		Padding(0, 2)
 
 	activeTabStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("230")).
+		Foreground(lipgloss.Color("0")).
 		Background(lipgloss.Color("86")).
 		Bold(true).
 		Padding(0, 2)
