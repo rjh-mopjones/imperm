@@ -1,158 +1,176 @@
-# Imperm - Kubernetes Environment Manager
+# Imperm
 
-A k9s-inspired TUI (Terminal User Interface) for managing Kubernetes environments through a middleware layer. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) and [Lipgloss](https://github.com/charmbracelet/lipgloss).
-
-## Features
-
-- **Two-tab interface**: Control and Observe
-- **Control Tab**: Build and destroy environments with a visual history
-- **Observe Tab**: k9s-style view of environments, pods, and deployments with auto-refresh
-- **Dual-Panel Layout**: Table on the left (60%), multi-view panel on the right (40%)
-- **Right Panel Views**:
-  - **Details**: Detailed information about selected resource
-  - **Logs**: Real-time logs for pods
-  - **Events**: Kubernetes events timeline
-  - **Stats**: Summary statistics and health status
-- **Resource Metrics**: View CPU and Memory usage for pods
-- **Drill-down Navigation**: Press Enter on an environment to view its resources with breadcrumb navigation
-- **Multiple Resource Views**: Toggle between Environments, Pods, and Deployments
-- **Focus-based Navigation**: Navigate between panels with arrow keys, highlighted borders show focus
-- **Mock Mode**: Test the UI without connecting to a real cluster
-- **Middleware Architecture**: Designed to work with a middleware API layer instead of direct kubectl access
-
-## Installation
-
-```bash
-go build -o imperm ./cmd/imperm
-```
-
-## Usage
-
-### Mock Mode (Development)
-
-```bash
-./imperm --mock
-```
-
-### Navigation
-
-#### Global
-- `Tab` - Switch between Control and Observe tabs
-- `q` or `Ctrl+C` - Quit
-
-#### Control Tab
-- `↑/↓` or `k/j` - Navigate actions
-- `Enter` - Select action
-- `Esc` - Cancel input mode
-
-#### Observe Tab
-- `←→` or `h/l` - Switch between table and right panel
-- `↑/↓` or `k/j` - Navigate (table: rows, right panel: views)
-- `Enter` - Drill down into selected environment
-- `Esc` - Go back to all environments
-- `e` - View Environments
-- `p` - View Pods
-- `d` - View Deployments
-- `1-4` - Quick switch to right panel views (Details/Logs/Events/Stats)
-- `r` - Manual refresh
-- `a` - Toggle auto-refresh
-
-#### Right Panel Views
-- **Details** (`1`) - Show detailed information about selected resource
-- **Logs** (`2`) - View logs for selected pod (pods only)
-- **Events** (`3`) - Show Kubernetes events for selected resource
-- **Stats** (`4`) - Display summary statistics for current view
-
-## Project Structure
-
-```
-imperm/
-├── cmd/
-│   └── imperm/
-│       └── main.go           # Application entry point
-├── internal/
-│   ├── middleware/
-│   │   ├── client.go         # Middleware client interface
-│   │   └── mock.go           # Mock implementation
-│   ├── models/
-│   │   └── environment.go    # Data models
-│   └── ui/
-│       ├── app.go            # Main application model
-│       ├── control.go        # Control tab
-│       └── observe.go        # Observe tab (k9s-style)
-├── go.mod
-├── go.sum
-└── README.md
-```
+Kubernetes environment management with a beautiful terminal UI.
 
 ## Architecture
 
-### Middleware Client Interface
+This is a **monorepo** containing two independent Go modules:
 
-The `middleware.Client` interface defines the contract for interacting with Kubernetes:
-
-```go
-type Client interface {
-    ListEnvironments() ([]models.Environment, error)
-    CreateEnvironment(name string, withOptions bool) error
-    DestroyEnvironment(name string) error
-    ListPods(namespace string) ([]models.Pod, error)
-    GetPodLogs(namespace, podName string) (string, error)
-    GetEnvironmentHistory() ([]models.EnvironmentHistory, error)
-}
+```
+imperm/
+├── ui/              # Terminal UI client (imperm-ui)
+│   └── go.mod       # Separate Go module
+│
+└── middleware/      # HTTP API server (imperm-server)
+    └── go.mod       # Separate Go module
 ```
 
-### Implementing a Real Middleware Client
+### Why Monorepo?
 
-To connect to your actual middleware API, create a new implementation of the `middleware.Client` interface:
+- **Single checkout**: Clone once, get everything
+- **Coordinated development**: Make changes across both in one PR
+- **Shared code**: `pkg/` directory contains shared client and models
+- **Independent modules**: Each has its own dependencies and versioning
 
-```go
-type HTTPClient struct {
-    baseURL string
-    // ... your HTTP client fields
-}
+## Quick Start
 
-func NewHTTPClient(baseURL string) *HTTPClient {
-    return &HTTPClient{
-        baseURL: baseURL,
-    }
-}
+### Prerequisites
 
-// Implement all Client interface methods
-func (c *HTTPClient) ListEnvironments() ([]models.Environment, error) {
-    // Make HTTP request to your middleware API
-    // Parse response into []models.Environment
-}
+- Go 1.23+
+- Make
 
-// ... implement other methods
+### Build
+
+```bash
+# Build both applications
+make all
+
+# Or build individually
+make ui
+make server
 ```
 
-Then update `cmd/imperm/main.go` to use your client:
+Binaries will be in `bin/`:
+- `bin/imperm-ui` - Terminal UI
+- `bin/imperm-server` - HTTP API server
 
-```go
-if *mockMode {
-    client = middleware.NewMockClient()
-} else {
-    client = middleware.NewHTTPClient("https://your-middleware-api.com")
-}
+### Run
+
+**Option 1: Standalone UI (Mock Mode)**
+
+```bash
+make run-ui
 ```
 
-## Future Enhancements
+**Option 2: Client-Server Mode**
 
-- Add support for real middleware API endpoints
-- Implement pod log viewing
-- Add filtering and searching capabilities
-- Support for additional Kubernetes resources (services, deployments, etc.)
-- Configuration file support for middleware endpoint
-- Export environment history to file
-- Custom themes with Lipgloss
+Terminal 1 - Start server:
+```bash
+make run-server
+```
 
-## Dependencies
+Terminal 2 - Start UI connected to server:
+```bash
+make run-ui-remote
+```
 
-- [Bubbletea](https://github.com/charmbracelet/bubbletea) - TUI framework
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Style definitions for TUIs
-- [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components
+## Project Structure
+
+### UI (`ui/`)
+
+Terminal user interface built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+
+```
+ui/
+├── cmd/           # Main entry point
+├── internal/      # UI-specific code
+│   ├── app.go
+│   ├── control/   # Control tab (create/destroy environments)
+│   └── observe/   # Observe tab (view pods, deployments)
+└── pkg/           # Shared code (client, models)
+```
+
+**Features**:
+- Two-panel layout with table and detail views
+- Multiple right-panel views (Details, Logs, Events, Stats)
+- Keyboard navigation with vim-style keybindings
+- Real-time auto-refresh
+- Can run standalone or connect to server
+
+### Middleware (`middleware/`)
+
+HTTP API server for Kubernetes management.
+
+```
+middleware/
+├── cmd/           # Main entry point
+├── internal/      # Server-specific code
+│   ├── api/       # HTTP handlers
+│   ├── k8s/       # Kubernetes client (TODO)
+│   └── store/     # State management (TODO)
+└── pkg/           # Shared code (client, models)
+```
+
+**API Endpoints**:
+- `GET /api/environments`
+- `POST /api/environments/create`
+- `POST /api/environments/destroy`
+- `GET /api/environments/history`
+- `GET /api/pods?namespace=X`
+- `GET /api/deployments?namespace=X`
+- `GET /health`
+
+## Development
+
+### Directory Conventions
+
+- **`cmd/`** - Application entry points (`package main`)
+- **`internal/`** - Private code (Go prevents external imports)
+- **`pkg/`** - Public libraries (can be imported by other projects)
+
+### Working on UI
+
+```bash
+cd ui
+go run ./cmd --mock
+```
+
+### Working on Server
+
+```bash
+cd middleware
+go run ./cmd --mock --port 8080
+```
+
+### Running Tests
+
+```bash
+make test          # Run all tests
+make test-ui       # UI tests only
+make test-server   # Server tests only
+```
+
+### Managing Dependencies
+
+```bash
+make tidy          # Tidy both modules
+```
+
+Or manually:
+```bash
+cd ui && go mod tidy
+cd middleware && go mod tidy
+```
+
+## Next Steps
+
+1. **Kubernetes Integration**: Implement `middleware/internal/k8s/client.go`
+2. **Real K8s Connection**: Update server to connect to actual Kubernetes clusters
+3. **Authentication**: Add auth to server API
+4. **Persistence**: Implement `middleware/internal/store/` for historical data
+5. **Real-time Updates**: Add WebSocket support for live updates
+
+## Commands Reference
+
+```bash
+make help          # Show all available commands
+make all           # Build both applications
+make clean         # Remove build artifacts
+make run-ui        # Run UI in mock mode
+make run-server    # Run server in mock mode
+make run-ui-remote # Run UI connected to server
+```
 
 ## License
 
-MIT
+[Your License Here]
