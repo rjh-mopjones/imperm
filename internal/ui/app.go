@@ -2,6 +2,8 @@ package ui
 
 import (
 	"imperm/internal/middleware"
+	"imperm/internal/ui/control"
+	"imperm/internal/ui/observe"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -25,8 +27,8 @@ func (e errMsg) Error() string {
 type Model struct {
 	client      middleware.Client
 	currentTab  tabType
-	controlTab  *controlTab
-	observeTab  *observeTab
+	controlTab  *control.Tab
+	observeTab  *observe.Tab
 	width       int
 	height      int
 	initialized bool
@@ -41,8 +43,8 @@ func NewModel(client middleware.Client) *Model {
 
 func (m *Model) Init() tea.Cmd {
 	// Initialize tabs lazily
-	m.controlTab = newControlTab(m.client)
-	m.observeTab = newObserveTab(m.client)
+	m.controlTab = control.NewTab(m.client)
+	m.observeTab = observe.NewTab(m.client)
 
 	var cmds []tea.Cmd
 	cmds = append(cmds, m.controlTab.Init())
