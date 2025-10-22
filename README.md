@@ -7,9 +7,16 @@ A k9s-inspired TUI (Terminal User Interface) for managing Kubernetes environment
 - **Two-tab interface**: Control and Observe
 - **Control Tab**: Build and destroy environments with a visual history
 - **Observe Tab**: k9s-style view of environments, pods, and deployments with auto-refresh
+- **Dual-Panel Layout**: Table on the left (60%), multi-view panel on the right (40%)
+- **Right Panel Views**:
+  - **Details**: Detailed information about selected resource
+  - **Logs**: Real-time logs for pods
+  - **Events**: Kubernetes events timeline
+  - **Stats**: Summary statistics and health status
 - **Resource Metrics**: View CPU and Memory usage for pods
 - **Drill-down Navigation**: Press Enter on an environment to view its resources with breadcrumb navigation
 - **Multiple Resource Views**: Toggle between Environments, Pods, and Deployments
+- **Focus-based Navigation**: Navigate between panels with arrow keys, highlighted borders show focus
 - **Mock Mode**: Test the UI without connecting to a real cluster
 - **Middleware Architecture**: Designed to work with a middleware API layer instead of direct kubectl access
 
@@ -39,14 +46,22 @@ go build -o imperm ./cmd/imperm
 - `Esc` - Cancel input mode
 
 #### Observe Tab
-- `↑/↓` or `k/j` - Navigate resources
+- `←→` or `h/l` - Switch between table and right panel
+- `↑/↓` or `k/j` - Navigate (table: rows, right panel: views)
 - `Enter` - Drill down into selected environment
 - `Esc` - Go back to all environments
 - `e` - View Environments
 - `p` - View Pods
 - `d` - View Deployments
+- `1-4` - Quick switch to right panel views (Details/Logs/Events/Stats)
 - `r` - Manual refresh
 - `a` - Toggle auto-refresh
+
+#### Right Panel Views
+- **Details** (`1`) - Show detailed information about selected resource
+- **Logs** (`2`) - View logs for selected pod (pods only)
+- **Events** (`3`) - Show Kubernetes events for selected resource
+- **Stats** (`4`) - Display summary statistics for current view
 
 ## Project Structure
 

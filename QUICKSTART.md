@@ -42,10 +42,15 @@
 5. Type a name like `my-test-env` and press `Enter`
 6. See it appear in the history on the right
 7. Press `Tab` to switch to the **Observe** tab
-8. See the mock environments and pods in a table
-9. Press `e` for Environments view, `p` for Pods view
-10. Press `a` to toggle auto-refresh
-11. Press `q` to quit
+8. See the mock environments in the left table
+9. Notice the **Details** panel on the right showing info about the selected environment
+10. Press `→` or `l` to focus the right panel
+11. Press `↑/↓` or `j/k` to cycle through: Details → Logs → Events → Stats
+12. Press `←` or `h` to go back to the table
+13. Press `p` to view Pods, then `→` to see pod details
+14. Press `2` to jump directly to Logs view (for pods)
+15. Press `4` to see Stats overview
+16. Press `q` to quit
 
 ## Mock Data
 

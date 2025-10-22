@@ -19,6 +19,22 @@ const (
 	resourceDeployments
 )
 
+type panelFocus int
+
+const (
+	focusTable panelFocus = iota
+	focusRightPanel
+)
+
+type rightPanelView int
+
+const (
+	rightPanelDetails rightPanelView = iota
+	rightPanelLogs
+	rightPanelEvents
+	rightPanelStats
+)
+
 type observeTab struct {
 	client           middleware.Client
 	currentResource  resourceType
@@ -35,6 +51,10 @@ type observeTab struct {
 	// Drill-down state
 	selectedEnvironment *models.Environment
 	filterNamespace     string
+
+	// Panel navigation
+	panelFocus     panelFocus
+	rightPanelView rightPanelView
 }
 
 func newObserveTab(client middleware.Client) *observeTab {
@@ -130,18 +150,38 @@ func (o *observeTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "left", "h":
+			// Move focus to table
+			o.panelFocus = focusTable
+		case "right", "l":
+			// Move focus to right panel
+			o.panelFocus = focusRightPanel
 		case "up", "k":
-			if o.selectedIndex > 0 {
-				o.selectedIndex--
+			if o.panelFocus == focusTable {
+				if o.selectedIndex > 0 {
+					o.selectedIndex--
+				}
+			} else {
+				// Cycle through right panel views
+				if o.rightPanelView > 0 {
+					o.rightPanelView--
+				}
 			}
 		case "down", "j":
-			maxIndex := o.getMaxIndex()
-			if o.selectedIndex < maxIndex-1 {
-				o.selectedIndex++
+			if o.panelFocus == focusTable {
+				maxIndex := o.getMaxIndex()
+				if o.selectedIndex < maxIndex-1 {
+					o.selectedIndex++
+				}
+			} else {
+				// Cycle through right panel views
+				if o.rightPanelView < rightPanelStats {
+					o.rightPanelView++
+				}
 			}
 		case "enter":
-			// Drill down into environment
-			if o.currentResource == resourceEnvironments && len(o.environments) > 0 {
+			// Drill down into environment (only when table focused)
+			if o.panelFocus == focusTable && o.currentResource == resourceEnvironments && len(o.environments) > 0 {
 				o.selectedEnvironment = &o.environments[o.selectedIndex]
 				o.filterNamespace = o.selectedEnvironment.Namespace
 				o.currentResource = resourcePods
@@ -155,26 +195,46 @@ func (o *observeTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				o.filterNamespace = ""
 				o.currentResource = resourceEnvironments
 				o.selectedIndex = 0
+				o.panelFocus = focusTable
 				return o, o.loadResources
 			}
 		case "e":
 			// Switch to environments view
 			o.currentResource = resourceEnvironments
 			o.selectedIndex = 0
+			o.panelFocus = focusTable
 		case "p":
 			// Switch to pods view
 			o.currentResource = resourcePods
 			o.selectedIndex = 0
+			o.panelFocus = focusTable
 		case "d":
 			// Switch to deployments view
 			o.currentResource = resourceDeployments
 			o.selectedIndex = 0
+			o.panelFocus = focusTable
 		case "r":
 			// Manual refresh
 			return o, o.loadResources
 		case "a":
 			// Toggle auto-refresh
 			o.autoRefresh = !o.autoRefresh
+		case "1":
+			// Quick switch to Details view
+			o.rightPanelView = rightPanelDetails
+			o.panelFocus = focusRightPanel
+		case "2":
+			// Quick switch to Logs view
+			o.rightPanelView = rightPanelLogs
+			o.panelFocus = focusRightPanel
+		case "3":
+			// Quick switch to Events view
+			o.rightPanelView = rightPanelEvents
+			o.panelFocus = focusRightPanel
+		case "4":
+			// Quick switch to Stats view
+			o.rightPanelView = rightPanelStats
+			o.panelFocus = focusRightPanel
 		}
 	}
 
@@ -200,21 +260,45 @@ func (o *observeTab) getMaxIndex() int {
 	}
 }
 
+func (o *observeTab) getSelectedResource() interface{} {
+	if o.getMaxIndex() == 0 || o.selectedIndex >= o.getMaxIndex() {
+		return nil
+	}
+
+	switch o.currentResource {
+	case resourceEnvironments:
+		return o.environments[o.selectedIndex]
+	case resourcePods:
+		if o.selectedEnvironment != nil {
+			return o.selectedEnvironment.Pods[o.selectedIndex]
+		}
+		return o.pods[o.selectedIndex]
+	case resourceDeployments:
+		if o.selectedEnvironment != nil {
+			return o.selectedEnvironment.Deployments[o.selectedIndex]
+		}
+		return o.deployments[o.selectedIndex]
+	}
+	return nil
+}
+
 func (o *observeTab) View() string {
 	if o.width == 0 {
 		return "Loading..."
 	}
 
 	// Styles
+	cyanColor := lipgloss.Color("51")
+
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86")).
+		Foreground(cyanColor).
 		Background(lipgloss.Color("236")).
 		Padding(0, 1)
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("86")).
+		Foreground(cyanColor).
 		Padding(1, 0)
 
 	tableHeaderStyle := lipgloss.NewStyle().
@@ -226,8 +310,11 @@ func (o *observeTab) View() string {
 	rowStyle := lipgloss.NewStyle().
 		Padding(0, 1)
 
+	// Cyan highlight for selected row
 	selectedRowStyle := rowStyle.Copy().
-		Background(lipgloss.Color("237"))
+		Background(lipgloss.Color("237")).
+		Foreground(lipgloss.Color("51")).
+		Bold(true)
 
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
@@ -281,21 +368,53 @@ func (o *observeTab) View() string {
 		content.WriteString(o.renderDeploymentsTable(tableHeaderStyle, rowStyle, selectedRowStyle))
 	}
 
-	// Help text
-	var helpText string
-	if o.selectedEnvironment != nil {
-		helpText = "[e] Environments  [p] Pods  [d] Deployments  [esc] Back  [↑↓/jk] Navigate  [r] Refresh  [a] Auto-refresh  [q] Quit"
-	} else {
-		helpText = "[e] Environments  [p] Pods  [d] Deployments  [Enter] Drill-down  [↑↓/jk] Navigate  [r] Refresh  [a] Auto-refresh  [q] Quit"
-	}
-	help := helpStyle.Render(helpText)
+	// Right panel
+	rightPanelContent := o.renderRightPanel()
 
-	// Combine all parts
-	mainContent := lipgloss.NewStyle().
-		Width(o.width - 4).
+	// Calculate widths for two-panel layout
+	tableWidth := (o.width * 6) / 10  // 60% for table
+	rightWidth := o.width - tableWidth // 40% for right panel
+
+	// Reuse cyan color for highlights
+	dimColor := lipgloss.Color("240")  // Dim gray
+
+	// Style for focused/unfocused panels
+	tableBorderColor := dimColor
+	rightBorderColor := dimColor
+	if o.panelFocus == focusTable {
+		tableBorderColor = cyanColor
+	} else {
+		rightBorderColor = cyanColor
+	}
+
+	// Table panel (no border, just separator)
+	tablePanel := lipgloss.NewStyle().
+		Width(tableWidth - 2).
 		Height(o.height - 8).
 		Padding(1).
+		Border(lipgloss.NormalBorder(), false, true, false, false).
+		BorderForeground(tableBorderColor).
 		Render(content.String())
+
+	// Right panel with full box border
+	rightPanel := lipgloss.NewStyle().
+		Width(rightWidth - 4).
+		Height(o.height - 10).
+		Padding(1).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(rightBorderColor).
+		Render(rightPanelContent)
+
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, tablePanel, rightPanel)
+
+	// Help text
+	var helpText string
+	if o.panelFocus == focusTable {
+		helpText = "[←→/hl] Switch Panel  [e/p/d] Views  [Enter] Drill-down  [↑↓/jk] Navigate  [1-4] Right Panel  [r] Refresh  [q] Quit"
+	} else {
+		helpText = "[←→/hl] Switch Panel  [↑↓/jk] Cycle Views  [1] Details  [2] Logs  [3] Events  [4] Stats  [q] Quit"
+	}
+	help := helpStyle.Render(helpText)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -466,4 +585,218 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func (o *observeTab) renderRightPanel() string {
+	var panelName string
+	switch o.rightPanelView {
+	case rightPanelDetails:
+		panelName = "Details"
+	case rightPanelLogs:
+		panelName = "Logs"
+	case rightPanelEvents:
+		panelName = "Events"
+	case rightPanelStats:
+		panelName = "Stats"
+	}
+
+	// Use cyan for title when panel is focused
+	titleColor := lipgloss.Color("245")
+	if o.panelFocus == focusRightPanel {
+		titleColor = lipgloss.Color("51") // Cyan
+	}
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(titleColor).
+		Padding(0, 0, 1, 0)
+
+	var content strings.Builder
+	content.WriteString(titleStyle.Render(panelName))
+	content.WriteString("\n")
+
+	switch o.rightPanelView {
+	case rightPanelDetails:
+		content.WriteString(o.renderDetailsView())
+	case rightPanelLogs:
+		content.WriteString(o.renderLogsView())
+	case rightPanelEvents:
+		content.WriteString(o.renderEventsView())
+	case rightPanelStats:
+		content.WriteString(o.renderStatsView())
+	}
+
+	return content.String()
+}
+
+func (o *observeTab) renderDetailsView() string {
+	resource := o.getSelectedResource()
+	if resource == nil {
+		return "Select a resource to view details"
+	}
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Width(15)
+
+	valueStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255"))
+
+	var details strings.Builder
+
+	switch r := resource.(type) {
+	case models.Environment:
+		details.WriteString(labelStyle.Render("Name:") + " " + valueStyle.Render(r.Name) + "\n")
+		details.WriteString(labelStyle.Render("Namespace:") + " " + valueStyle.Render(r.Namespace) + "\n")
+		details.WriteString(labelStyle.Render("Status:") + " " + valueStyle.Render(r.Status) + "\n")
+		details.WriteString(labelStyle.Render("Age:") + " " + valueStyle.Render(formatAge(r.Age)) + "\n")
+		details.WriteString(labelStyle.Render("Pods:") + " " + valueStyle.Render(fmt.Sprintf("%d", len(r.Pods))) + "\n")
+		details.WriteString(labelStyle.Render("Deployments:") + " " + valueStyle.Render(fmt.Sprintf("%d", len(r.Deployments))) + "\n")
+
+	case models.Pod:
+		details.WriteString(labelStyle.Render("Name:") + " " + valueStyle.Render(r.Name) + "\n")
+		details.WriteString(labelStyle.Render("Namespace:") + " " + valueStyle.Render(r.Namespace) + "\n")
+		details.WriteString(labelStyle.Render("Status:") + " " + valueStyle.Render(r.Status) + "\n")
+		details.WriteString(labelStyle.Render("Ready:") + " " + valueStyle.Render(r.Ready) + "\n")
+		details.WriteString(labelStyle.Render("Restarts:") + " " + valueStyle.Render(fmt.Sprintf("%d", r.Restarts)) + "\n")
+		details.WriteString(labelStyle.Render("CPU:") + " " + valueStyle.Render(r.CPU) + "\n")
+		details.WriteString(labelStyle.Render("Memory:") + " " + valueStyle.Render(r.Memory) + "\n")
+		details.WriteString(labelStyle.Render("Age:") + " " + valueStyle.Render(formatAge(r.Age)) + "\n")
+
+	case models.Deployment:
+		details.WriteString(labelStyle.Render("Name:") + " " + valueStyle.Render(r.Name) + "\n")
+		details.WriteString(labelStyle.Render("Namespace:") + " " + valueStyle.Render(r.Namespace) + "\n")
+		details.WriteString(labelStyle.Render("Ready:") + " " + valueStyle.Render(r.Ready) + "\n")
+		details.WriteString(labelStyle.Render("Up-to-Date:") + " " + valueStyle.Render(fmt.Sprintf("%d", r.UpToDate)) + "\n")
+		details.WriteString(labelStyle.Render("Available:") + " " + valueStyle.Render(fmt.Sprintf("%d", r.Available)) + "\n")
+		details.WriteString(labelStyle.Render("Age:") + " " + valueStyle.Render(formatAge(r.Age)) + "\n")
+	}
+
+	return details.String()
+}
+
+func (o *observeTab) renderLogsView() string {
+	resource := o.getSelectedResource()
+	if resource == nil {
+		return "Select a pod to view logs"
+	}
+
+	pod, ok := resource.(models.Pod)
+	if !ok {
+		return "Logs are only available for pods"
+	}
+
+	// Mock logs for now
+	logs := fmt.Sprintf("Fetching logs for %s...\n\n", pod.Name)
+	logs += "[2025-10-22 20:30:15] INFO: Container started\n"
+	logs += "[2025-10-22 20:30:16] INFO: Initializing application\n"
+	logs += "[2025-10-22 20:30:17] INFO: Loading configuration\n"
+	logs += "[2025-10-22 20:30:18] INFO: Connecting to database\n"
+	logs += "[2025-10-22 20:30:20] INFO: Server listening on port 8080\n"
+	logs += "[2025-10-22 20:30:25] INFO: Health check passed\n"
+	logs += "[2025-10-22 20:31:00] INFO: Processing request GET /api/health\n"
+	logs += "[2025-10-22 20:31:30] INFO: Processing request GET /api/status\n"
+
+	return logs
+}
+
+func (o *observeTab) renderEventsView() string {
+	resource := o.getSelectedResource()
+	if resource == nil {
+		return "Select a resource to view events"
+	}
+
+	eventStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("yellow"))
+	normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
+
+	var events strings.Builder
+
+	// Mock events
+	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  2m ago  Successfully pulled image\n"))
+	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  5m ago  Created container\n"))
+	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  5m ago  Started container\n"))
+	events.WriteString(warningStyle.Render("● Warning") + eventStyle.Render(" 1h ago  Back-off restarting failed container\n"))
+	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  2h ago  Scaled deployment to 2 replicas\n"))
+
+	return events.String()
+}
+
+func (o *observeTab) renderStatsView() string {
+	statLabelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("86")).
+		Bold(true)
+
+	statValueStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255")).
+		Bold(true)
+
+	var stats strings.Builder
+
+	switch o.currentResource {
+	case resourceEnvironments:
+		total := len(o.environments)
+		stats.WriteString(statLabelStyle.Render("Total Environments: ") + statValueStyle.Render(fmt.Sprintf("%d", total)) + "\n\n")
+
+		totalPods := 0
+		totalDeployments := 0
+		for _, env := range o.environments {
+			totalPods += len(env.Pods)
+			totalDeployments += len(env.Deployments)
+		}
+		stats.WriteString(statLabelStyle.Render("Total Pods: ") + statValueStyle.Render(fmt.Sprintf("%d", totalPods)) + "\n")
+		stats.WriteString(statLabelStyle.Render("Total Deployments: ") + statValueStyle.Render(fmt.Sprintf("%d", totalDeployments)) + "\n")
+
+	case resourcePods:
+		var pods []models.Pod
+		if o.selectedEnvironment != nil {
+			pods = o.selectedEnvironment.Pods
+		} else {
+			pods = o.pods
+		}
+
+		total := len(pods)
+		running := 0
+		pending := 0
+		failed := 0
+
+		for _, pod := range pods {
+			switch pod.Status {
+			case "Running":
+				running++
+			case "Pending":
+				pending++
+			case "Failed":
+				failed++
+			}
+		}
+
+		stats.WriteString(statLabelStyle.Render("Total Pods: ") + statValueStyle.Render(fmt.Sprintf("%d", total)) + "\n\n")
+		stats.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("green")).Render("● Running: ") + fmt.Sprintf("%d\n", running))
+		stats.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("yellow")).Render("● Pending: ") + fmt.Sprintf("%d\n", pending))
+		stats.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("red")).Render("● Failed: ") + fmt.Sprintf("%d\n", failed))
+
+	case resourceDeployments:
+		var deployments []models.Deployment
+		if o.selectedEnvironment != nil {
+			deployments = o.selectedEnvironment.Deployments
+		} else {
+			deployments = o.deployments
+		}
+
+		total := len(deployments)
+		totalReplicas := 0
+		totalAvailable := 0
+
+		for _, dep := range deployments {
+			totalReplicas += dep.UpToDate
+			totalAvailable += dep.Available
+		}
+
+		stats.WriteString(statLabelStyle.Render("Total Deployments: ") + statValueStyle.Render(fmt.Sprintf("%d", total)) + "\n\n")
+		stats.WriteString(statLabelStyle.Render("Total Replicas: ") + statValueStyle.Render(fmt.Sprintf("%d", totalReplicas)) + "\n")
+		stats.WriteString(statLabelStyle.Render("Available: ") + statValueStyle.Render(fmt.Sprintf("%d", totalAvailable)) + "\n")
+	}
+
+	return stats.String()
 }
