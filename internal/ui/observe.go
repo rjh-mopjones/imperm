@@ -315,10 +315,16 @@ func (o *observeTab) View() string {
 		Background(lipgloss.Color("236")).
 		Padding(0, 1)
 
+	// Title color changes based on focus
+	titleColor := lipgloss.Color("245") // Grey when not focused
+	if o.panelFocus == focusTable {
+		titleColor = cyanColor // Cyan when focused
+	}
+
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(cyanColor).
-		Padding(1, 0)
+		Foreground(titleColor).
+		Padding(0, 0, 1, 0)
 
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -399,21 +405,16 @@ func (o *observeTab) View() string {
 	dimColor := lipgloss.Color("240")  // Dim gray
 
 	// Style for focused/unfocused panels
-	tableBorderColor := dimColor
 	rightBorderColor := dimColor
-	if o.panelFocus == focusTable {
-		tableBorderColor = cyanColor
-	} else {
+	if o.panelFocus == focusRightPanel {
 		rightBorderColor = cyanColor
 	}
 
-	// Table panel (no border, just separator)
+	// Table panel (no border)
 	tablePanel := lipgloss.NewStyle().
 		Width(tableWidth - 2).
 		Height(o.height - 8).
 		Padding(1).
-		Border(lipgloss.NormalBorder(), false, true, false, false).
-		BorderForeground(tableBorderColor).
 		Render(content.String())
 
 	// Right panel with full box border
@@ -630,18 +631,41 @@ func (o *observeTab) renderRightPanel(height int) string {
 		Bold(true).
 		Padding(0, 1)
 
-	// Build view list
-	var viewList strings.Builder
+	numberStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Bold(true).
+		Padding(0, 1)
+
+	// Build number row and view row separately
+	var numberRow strings.Builder
+	var viewRow strings.Builder
+
 	for i, view := range views {
+		// Add number
+		number := fmt.Sprintf("[%d]", i+1)
+		// Calculate width to match view name width
+		viewNameWidth := lipgloss.Width(view.name) + 2 // +2 for padding
+		numberRow.WriteString(numberStyle.Width(viewNameWidth).Align(lipgloss.Center).Render(number))
+		if i < len(views)-1 {
+			numberRow.WriteString(" ")
+		}
+
+		// Add view name
 		style := viewItemStyle
 		if view.view == o.rightPanelView {
 			style = selectedViewStyle
 		}
-		viewList.WriteString(style.Render(view.name))
+		viewRow.WriteString(style.Render(view.name))
 		if i < len(views)-1 {
-			viewList.WriteString(" ")
+			viewRow.WriteString(" ")
 		}
 	}
+
+	// Combine number row and view row
+	var viewList strings.Builder
+	viewList.WriteString(numberRow.String())
+	viewList.WriteString("\n")
+	viewList.WriteString(viewRow.String())
 
 	// Use cyan for title when panel is focused
 	titleColor := lipgloss.Color("245")
@@ -651,8 +675,7 @@ func (o *observeTab) renderRightPanel(height int) string {
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(titleColor).
-		Padding(0, 0, 1, 0)
+		Foreground(titleColor)
 
 	separatorStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240"))
@@ -663,7 +686,7 @@ func (o *observeTab) renderRightPanel(height int) string {
 	content.WriteString(viewList.String())
 	content.WriteString("\n")
 	content.WriteString(separatorStyle.Render(strings.Repeat("─", 80)))
-	content.WriteString("\n\n")
+	content.WriteString("\n")
 
 	// Add the current view name
 	var panelName string
@@ -697,8 +720,8 @@ func (o *observeTab) renderRightPanel(height int) string {
 	// Apply scrolling
 	lines := strings.Split(viewContent, "\n")
 
-	// Calculate available height for content (subtract view list, separator, title)
-	availableHeight := height - 5
+	// Calculate available height for content (subtract numbers, view list, separator, title)
+	availableHeight := height - 6
 
 	// Ensure scroll offset is within bounds
 	maxOffset := len(lines) - availableHeight
@@ -798,18 +821,20 @@ func (o *observeTab) renderEventsView() string {
 		return "Select a resource to view events"
 	}
 
-	eventStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("yellow"))
-	normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("green"))
+	// Color codes
+	green := "\033[32m"
+	yellow := "\033[33m"
+	gray := "\033[38;5;245m"
+	reset := "\033[0m"
 
 	var events strings.Builder
 
-	// Mock events
-	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  2m ago  Successfully pulled image\n"))
-	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  5m ago  Created container\n"))
-	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  5m ago  Started container\n"))
-	events.WriteString(warningStyle.Render("● Warning") + eventStyle.Render(" 1h ago  Back-off restarting failed container\n"))
-	events.WriteString(normalStyle.Render("● Normal") + eventStyle.Render("  2h ago  Scaled deployment to 2 replicas\n"))
+	// Mock events - using ANSI codes directly to avoid lipgloss padding issues
+	events.WriteString(fmt.Sprintf("%s● Normal  %s%s2m ago  Successfully pulled image%s\n", green, reset, gray, reset))
+	events.WriteString(fmt.Sprintf("%s● Normal  %s%s5m ago  Created container%s\n", green, reset, gray, reset))
+	events.WriteString(fmt.Sprintf("%s● Normal  %s%s5m ago  Started container%s\n", green, reset, gray, reset))
+	events.WriteString(fmt.Sprintf("%s● Warning %s%s1h ago  Back-off restarting failed container%s\n", yellow, reset, gray, reset))
+	events.WriteString(fmt.Sprintf("%s● Normal  %s%s2h ago  Scaled deployment to 2 replicas%s\n", green, reset, gray, reset))
 
 	return events.String()
 }
