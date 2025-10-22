@@ -9,12 +9,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 // K8sClient implements the client.Client interface for real Kubernetes
 type K8sClient struct {
-	clientset *kubernetes.Clientset
-	ctx       context.Context
+	clientset       *kubernetes.Clientset
+	metricsClient   *metricsv.Clientset
+	ctx             context.Context
 }
 
 // NewClient creates a new Kubernetes client
@@ -30,9 +32,17 @@ func NewClient() (*K8sClient, error) {
 		return nil, fmt.Errorf("failed to create kubernetes clientset: %w", err)
 	}
 
+	// Create metrics client (optional - won't fail if metrics-server isn't available)
+	metricsClient, err := metricsv.NewForConfig(config)
+	if err != nil {
+		// Metrics client creation failed, but we can continue without it
+		metricsClient = nil
+	}
+
 	return &K8sClient{
-		clientset: clientset,
-		ctx:       context.Background(),
+		clientset:     clientset,
+		metricsClient: metricsClient,
+		ctx:           context.Background(),
 	}, nil
 }
 

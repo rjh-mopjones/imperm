@@ -236,8 +236,8 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Load stats after resources are loaded
-		return t, t.loadStats()
+		// Load stats and current view data after resources are loaded
+		return t, tea.Batch(t.loadStats(), t.loadDataForCurrentView())
 
 	case logsLoadedMsg:
 		t.currentLogs = msg.logs
@@ -281,6 +281,8 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t.panelFocus == FocusTable {
 				if t.selectedIndex > 0 {
 					t.selectedIndex--
+					// Reload data for the newly selected resource
+					return t, t.loadDataForCurrentView()
 				}
 			} else {
 				// Scroll up in right panel
@@ -293,6 +295,8 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				maxIndex := t.getMaxIndex()
 				if t.selectedIndex < maxIndex-1 {
 					t.selectedIndex++
+					// Reload data for the newly selected resource
+					return t, t.loadDataForCurrentView()
 				}
 			} else {
 				// Scroll down in right panel
@@ -322,16 +326,19 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.currentResource = ResourceEnvironments
 			t.selectedIndex = 0
 			t.panelFocus = FocusTable
+			return t, t.loadDataForCurrentView()
 		case "p":
 			// Switch to pods view
 			t.currentResource = ResourcePods
 			t.selectedIndex = 0
 			t.panelFocus = FocusTable
+			return t, t.loadDataForCurrentView()
 		case "d":
 			// Switch to deployments view
 			t.currentResource = ResourceDeployments
 			t.selectedIndex = 0
 			t.panelFocus = FocusTable
+			return t, t.loadDataForCurrentView()
 		case "r":
 			// Manual refresh
 			return t, t.loadResources

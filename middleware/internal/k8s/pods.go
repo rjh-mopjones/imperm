@@ -34,18 +34,34 @@ func (c *K8sClient) ListPods(namespace string) ([]models.Pod, error) {
 
 		readyStatus := fmt.Sprintf("%d/%d", readyContainers, totalContainers)
 
-		// Get resource usage (these would be from metrics-server in production)
-		cpu := "0m"
-		memory := "0Mi"
+		// Get actual resource usage from metrics-server
+		cpu := "N/A"
+		memory := "N/A"
 
-		// Try to get resource requests as a proxy
-		for _, container := range pod.Spec.Containers {
-			if container.Resources.Requests != nil {
-				if cpuReq := container.Resources.Requests.Cpu(); cpuReq != nil {
-					cpu = cpuReq.String()
+		// Try to get metrics from metrics-server if available
+		if c.metricsClient != nil {
+			podMetrics, err := c.metricsClient.MetricsV1beta1().PodMetricses(pod.Namespace).Get(c.ctx, pod.Name, metav1.GetOptions{})
+			if err == nil && len(podMetrics.Containers) > 0 {
+				// Sum up all container metrics
+				var totalCPU, totalMemory int64
+				for _, container := range podMetrics.Containers {
+					totalCPU += container.Usage.Cpu().MilliValue()
+					totalMemory += container.Usage.Memory().Value()
 				}
-				if memReq := container.Resources.Requests.Memory(); memReq != nil {
-					memory = memReq.String()
+				cpu = fmt.Sprintf("%dm", totalCPU)
+				memory = fmt.Sprintf("%dMi", totalMemory/(1024*1024))
+			} else {
+				// Fall back to resource requests if metrics call failed
+				for _, container := range pod.Spec.Containers {
+					if container.Resources.Requests != nil {
+						if cpuReq := container.Resources.Requests.Cpu(); cpuReq != nil {
+							cpu = cpuReq.String()
+						}
+						if memReq := container.Resources.Requests.Memory(); memReq != nil {
+							memory = memReq.String()
+						}
+						break // Use first container's requests
+					}
 				}
 			}
 		}
