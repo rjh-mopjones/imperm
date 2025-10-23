@@ -55,7 +55,7 @@ func (c *K8sClient) ListEnvironments() ([]models.Environment, error) {
 }
 
 // CreateEnvironment creates a new environment (namespace + optional starter resources)
-func (c *K8sClient) CreateEnvironment(name string, withOptions bool) error {
+func (c *K8sClient) CreateEnvironment(name string, options *models.DeploymentOptions) error {
 	// Create namespace
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -74,8 +74,8 @@ func (c *K8sClient) CreateEnvironment(name string, withOptions bool) error {
 		return fmt.Errorf("failed to create namespace: %w", err)
 	}
 
-	// If withOptions is true, create a sample deployment
-	if withOptions {
+	// If options provided, create resources
+	if options != nil && options.HasLoggers() {
 		if err := c.createSampleDeployment(name); err != nil {
 			// Namespace was created, so don't fail completely
 			// Just log the error (in production, you'd want proper logging)

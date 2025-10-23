@@ -105,7 +105,7 @@ func (m *MockClient) ListEnvironments() ([]models.Environment, error) {
 	return m.environments, nil
 }
 
-func (m *MockClient) CreateEnvironment(name string, withOptions bool) error {
+func (m *MockClient) CreateEnvironment(name string, options *models.DeploymentOptions) error {
 	// Simulate environment creation
 	now := time.Now()
 	newEnv := models.Environment{
@@ -118,11 +118,12 @@ func (m *MockClient) CreateEnvironment(name string, withOptions bool) error {
 	m.environments = append(m.environments, newEnv)
 
 	// Add to history
+	hasOptions := options != nil && (options.ConstantLogger > 0 || options.FastLogger > 0 || options.ErrorLogger > 0 || options.JsonLogger > 0)
 	historyEntry := models.EnvironmentHistory{
 		Name:        name,
 		LaunchedAt:  now,
 		Status:      "Success",
-		WithOptions: withOptions,
+		WithOptions: hasOptions,
 	}
 	m.history = append(m.history, historyEntry)
 

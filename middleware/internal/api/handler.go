@@ -10,6 +10,7 @@ import (
 	"imperm-middleware/internal/k8s"
 	"imperm-middleware/internal/terraform"
 	"imperm-middleware/pkg/client"
+	"imperm-middleware/pkg/models"
 )
 
 type Handler struct {
@@ -159,8 +160,10 @@ func (h *Handler) handleCreateEnvironment(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		Name        string `json:"name"`
-		WithOptions bool   `json:"with_options"`
+		Name    string                  `json:"name"`
+		Options *models.DeploymentOptions `json:"options"`
+		// Keep backward compatibility
+		WithOptions bool `json:"with_options"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -168,7 +171,14 @@ func (h *Handler) handleCreateEnvironment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := h.client.CreateEnvironment(req.Name, req.WithOptions)
+	// If no options provided but withOptions is true, create empty options
+	if req.Options == nil && req.WithOptions {
+		req.Options = &models.DeploymentOptions{
+			Name: req.Name,
+		}
+	}
+
+	err := h.client.CreateEnvironment(req.Name, req.Options)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

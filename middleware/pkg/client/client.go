@@ -8,7 +8,7 @@ import (
 type Client interface {
 	// Environment operations
 	ListEnvironments() ([]models.Environment, error)
-	CreateEnvironment(name string, withOptions bool) error
+	CreateEnvironment(name string, options *models.DeploymentOptions) error
 	DestroyEnvironment(name string) error
 
 	// Pod operations

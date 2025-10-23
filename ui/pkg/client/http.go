@@ -48,10 +48,10 @@ func (c *HTTPClient) ListEnvironments() ([]models.Environment, error) {
 }
 
 // CreateEnvironment creates a new environment via the middleware API
-func (c *HTTPClient) CreateEnvironment(name string, withOptions bool) error {
+func (c *HTTPClient) CreateEnvironment(name string, options *models.DeploymentOptions) error {
 	payload := map[string]interface{}{
-		"name":         name,
-		"with_options": withOptions,
+		"name":    name,
+		"options": options,
 	}
 
 	body, err := json.Marshal(payload)

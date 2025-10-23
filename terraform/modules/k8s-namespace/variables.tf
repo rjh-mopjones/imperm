@@ -8,8 +8,26 @@ variable "namespace_name" {
   }
 }
 
-variable "with_options" {
-  description = "Whether to create sample resources (deployment, service) in the namespace"
-  type        = bool
-  default     = false
+variable "constant_logger" {
+  description = "Number of constant logger replicas (logs every 2s)"
+  type        = number
+  default     = 0
+}
+
+variable "fast_logger" {
+  description = "Number of fast logger replicas (logs every 0.5s)"
+  type        = number
+  default     = 0
+}
+
+variable "error_logger" {
+  description = "Number of error logger replicas (mixed INFO/ERROR logs)"
+  type        = number
+  default     = 0
+}
+
+variable "json_logger" {
+  description = "Number of JSON logger replicas (JSON formatted logs)"
+  type        = number
+  default     = 0
 }

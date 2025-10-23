@@ -251,7 +251,8 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				t.currentOperation = envName
 				t.operationLogs = []string{}
 				t.operationStatus = "running"
-				go t.client.CreateEnvironment(envName, false)
+				// Create with nil options (no loggers)
+				go t.client.CreateEnvironment(envName, nil)
 				t.textInput.Reset()
 			}
 			t.inputMode = false
@@ -320,10 +321,11 @@ func (t *Tab) updateOptionCategories(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		// Create environment with configured options
 		envName := t.getEnvironmentName()
+		options := t.getDeploymentOptions(envName)
 		t.currentOperation = envName
 		t.operationLogs = []string{}
 		t.operationStatus = "running"
-		go t.client.CreateEnvironment(envName, true)
+		go t.client.CreateEnvironment(envName, options)
 		t.currentScreen = screenMainActions
 		return t, t.loadHistory
 	}
@@ -412,6 +414,47 @@ func (t *Tab) getEnvironmentName() string {
 	}
 	// Generate default name with timestamp
 	return fmt.Sprintf("env-%d", len(t.history)+1)
+}
+
+func (t *Tab) getDeploymentOptions(envName string) *models.DeploymentOptions {
+	options := &models.DeploymentOptions{
+		Name: envName,
+	}
+
+	// Parse DeployOptions category
+	for _, category := range t.optionCategories {
+		if category.name == "DeployOptions" {
+			for _, field := range category.fields {
+				if field.value == "" {
+					continue
+				}
+
+				switch field.name {
+				case "Namespace":
+					options.Namespace = field.value
+				case "ConstantLogger":
+					// Parse replica count
+					var replicas int
+					fmt.Sscanf(field.value, "%d", &replicas)
+					options.ConstantLogger = replicas
+				case "FastLogger":
+					var replicas int
+					fmt.Sscanf(field.value, "%d", &replicas)
+					options.FastLogger = replicas
+				case "ErrorLogger":
+					var replicas int
+					fmt.Sscanf(field.value, "%d", &replicas)
+					options.ErrorLogger = replicas
+				case "JsonLogger":
+					var replicas int
+					fmt.Sscanf(field.value, "%d", &replicas)
+					options.JsonLogger = replicas
+				}
+			}
+		}
+	}
+
+	return options
 }
 
 func (t *Tab) View() string {

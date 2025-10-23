@@ -8,12 +8,22 @@ output "namespace_id" {
   value       = kubernetes_namespace.environment.id
 }
 
-output "deployment_created" {
-  description = "Whether a sample deployment was created"
-  value       = var.with_options
+output "constant_logger_created" {
+  description = "Whether constant logger was created"
+  value       = var.constant_logger > 0
 }
 
-output "service_created" {
-  description = "Whether a sample service was created"
-  value       = var.with_options
+output "fast_logger_created" {
+  description = "Whether fast logger was created"
+  value       = var.fast_logger > 0
+}
+
+output "error_logger_created" {
+  description = "Whether error logger was created"
+  value       = var.error_logger > 0
+}
+
+output "json_logger_created" {
+  description = "Whether JSON logger was created"
+  value       = var.json_logger > 0
 }

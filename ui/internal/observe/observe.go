@@ -3,6 +3,7 @@ package observe
 import (
 	"imperm-ui/pkg/client"
 	"imperm-ui/pkg/models"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -253,7 +254,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if t.autoRefresh {
 			// Reload resources and also reload current view data (logs, events, etc.)
-			return t, tea.Batch(t.loadResources, t.tick())
+			return t, tea.Batch(t.loadResources, t.loadDataForCurrentView(), t.tick())
 		}
 		return t, t.tick()
 
@@ -286,9 +287,25 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, tea.Batch(t.loadStats(), t.loadDataForCurrentView())
 
 	case logsLoadedMsg:
-		// If the pod name changed, reset scroll to top
+		// If the pod name changed, reset scroll to bottom for new pod
 		if t.lastPodName != "" && t.lastPodName != msg.podName {
-			t.scrollOffset = 0
+			t.scrollOffset = 999999 // Will be clamped to max in render
+		} else if t.lastPodName == msg.podName && t.currentLogs != "" {
+			// Same pod, check if we were at/near the bottom
+			oldLines := len(strings.Split(t.currentLogs, "\n"))
+			// If we were within 5 lines of the bottom, auto-scroll to new bottom
+			availableHeight := t.height - 16 // Approximate content height
+			maxOldOffset := oldLines - availableHeight
+			if maxOldOffset < 0 {
+				maxOldOffset = 0
+			}
+			if t.scrollOffset >= maxOldOffset-5 {
+				// User was at/near bottom, scroll to new bottom
+				t.scrollOffset = 999999 // Will be clamped to max in render
+			}
+		} else {
+			// First load, scroll to bottom
+			t.scrollOffset = 999999 // Will be clamped to max in render
 		}
 		t.currentLogs = msg.logs
 		t.lastPodName = msg.podName
