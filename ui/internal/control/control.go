@@ -581,6 +581,9 @@ func (t *Tab) viewOptionForm() string {
 		return "Invalid category"
 	}
 
+	leftWidth := t.width / 2
+	rightWidth := t.width - leftWidth
+
 	category := t.optionCategories[t.currentCategoryIndex]
 
 	titleStyle := lipgloss.NewStyle().
@@ -598,9 +601,10 @@ func (t *Tab) viewOptionForm() string {
 		Foreground(lipgloss.Color("241")).
 		Padding(1, 0)
 
-	var content strings.Builder
-	content.WriteString(titleStyle.Render(category.name))
-	content.WriteString("\n\n")
+	// Left panel - Form
+	var leftPanel strings.Builder
+	leftPanel.WriteString(titleStyle.Render(category.name))
+	leftPanel.WriteString("\n\n")
 
 	for i, field := range category.fields {
 		// Put label and input on same line
@@ -612,19 +616,78 @@ func (t *Tab) viewOptionForm() string {
 		}
 
 		line := lipgloss.JoinHorizontal(lipgloss.Left, label, " ", inputView)
-		content.WriteString(line)
-		content.WriteString("\n")
+		leftPanel.WriteString(line)
+		leftPanel.WriteString("\n")
 	}
 
-	content.WriteString("\n")
-	content.WriteString(helpStyle.Render("[↑↓/Tab] Navigate  [Enter] Next Field  [Esc] Save & Back"))
+	leftPanel.WriteString("\n")
+	leftPanel.WriteString(helpStyle.Render("[↑↓/Tab] Navigate  [Enter] Next Field  [Esc] Save & Back"))
 
-	box := lipgloss.NewStyle().
-		Width(t.width - 4).
+	// Right panel - Configured options (same as in viewOptionCategories)
+	var rightPanel strings.Builder
+	rightPanel.WriteString(titleStyle.Render("Configured Options"))
+	rightPanel.WriteString("\n\n")
+
+	categoryLabelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("86")).
+		Bold(true)
+
+	fieldStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Padding(0, 2)
+
+	valueStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255"))
+
+	hasAnyValues := false
+	for catIdx, cat := range t.optionCategories {
+		categoryHasValues := false
+		var categoryContent strings.Builder
+
+		for fieldIdx, field := range cat.fields {
+			var displayValue string
+			// If we're currently editing this category, show live input values
+			if catIdx == t.currentCategoryIndex && fieldIdx < len(t.fieldInputs) {
+				displayValue = t.fieldInputs[fieldIdx].Value()
+			} else {
+				displayValue = field.value
+			}
+
+			if displayValue != "" {
+				categoryHasValues = true
+				hasAnyValues = true
+				categoryContent.WriteString(fieldStyle.Render(fmt.Sprintf("%s: %s", field.name, valueStyle.Render(displayValue))))
+				categoryContent.WriteString("\n")
+			}
+		}
+
+		if categoryHasValues {
+			rightPanel.WriteString(categoryLabelStyle.Render(cat.name))
+			rightPanel.WriteString("\n")
+			rightPanel.WriteString(categoryContent.String())
+			rightPanel.WriteString("\n")
+		}
+	}
+
+	if !hasAnyValues {
+		rightPanel.WriteString(helpStyle.Render("No options configured yet"))
+	}
+
+	// Combine panels
+	leftBox := lipgloss.NewStyle().
+		Width(leftWidth - 2).
 		Height(t.height - 8).
-		Padding(2).
-		Render(content.String())
+		Padding(1).
+		Render(leftPanel.String())
 
-	return box
+	rightBox := lipgloss.NewStyle().
+		Width(rightWidth - 2).
+		Height(t.height - 8).
+		Padding(1).
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("240")).
+		Render(rightPanel.String())
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 }
 
