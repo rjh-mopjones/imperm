@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"imperm-ui/pkg/client"
 	"imperm-ui/pkg/models"
+	"imperm-ui/pkg/terraform"
 	"strings"
 	"time"
 
@@ -33,7 +34,6 @@ type optionField struct {
 
 type Tab struct {
 	client               client.Client
-	history              []models.EnvironmentHistory
 	selectedAction       int
 	actions              []string
 	textInput            textinput.Model
@@ -61,8 +61,95 @@ func NewTab(client client.Client) *Tab {
 	ti.CharLimit = 156
 	ti.Width = 30
 
-	// Initialize option categories
-	categories := []optionCategory{
+	// Load option categories dynamically from Terraform modules
+	categories := loadOptionsFromTerraform()
+
+	return &Tab{
+		client:           client,
+		selectedAction:   0,
+		actions: []string{
+			"Build Environment",
+			"Build Environment with Options",
+		},
+		textInput:        ti,
+		inputMode:        false,
+		currentScreen:    screenMainActions,
+		selectedCategory: 0,
+		optionCategories: categories,
+		selectedField:    0,
+	}
+}
+
+// loadOptionsFromTerraform loads option categories from Terraform modules
+func loadOptionsFromTerraform() []optionCategory {
+	// Try to load from default location (local Terraform module)
+	loader, err := terraform.DefaultLoader()
+	if err != nil {
+		// If loading fails, fall back to hardcoded defaults
+		// This ensures the UI always has options available
+		// TODO: Add logging when available
+		return getFallbackOptions()
+	}
+
+	tfCategories := loader.GetCategorizedOptions()
+	if len(tfCategories) == 0 {
+		// No categories found, use fallback
+		return getFallbackOptions()
+	}
+
+	// Successfully loaded from Terraform!
+	categories := make([]optionCategory, 0, len(tfCategories))
+
+	for _, tfCat := range tfCategories {
+		fields := make([]optionField, 0, len(tfCat.Variables))
+
+		for _, tfVar := range tfCat.Variables {
+			// Extract just the description part after " - "
+			desc := tfVar.Description
+			parts := strings.SplitN(desc, " - ", 2)
+			if len(parts) == 2 {
+				desc = parts[1]
+			}
+
+			// Create placeholder from description and default
+			placeholder := desc
+			if tfVar.Default != "" && tfVar.Default != "0" {
+				placeholder = fmt.Sprintf("%s (default: %s)", desc, tfVar.Default)
+			}
+
+			// Convert snake_case to PascalCase for field name
+			fieldName := toPascalCase(tfVar.Name)
+
+			fields = append(fields, optionField{
+				name:        fieldName,
+				placeholder: placeholder,
+				value:       "",
+			})
+		}
+
+		categories = append(categories, optionCategory{
+			name:   tfCat.Name,
+			fields: fields,
+		})
+	}
+
+	return categories
+}
+
+// toPascalCase converts snake_case to PascalCase
+func toPascalCase(s string) string {
+	parts := strings.Split(s, "_")
+	for i, part := range parts {
+		if len(part) > 0 {
+			parts[i] = strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return strings.Join(parts, "")
+}
+
+// getFallbackOptions returns hardcoded options if Terraform loading fails
+func getFallbackOptions() []optionCategory {
+	return []optionCategory{
 		{
 			name: "DeployOptions",
 			fields: []optionField{
@@ -77,73 +164,19 @@ func NewTab(client client.Client) *Tab {
 		{
 			name: "DockerOptions",
 			fields: []optionField{
-				{name: "Registry", placeholder: "e.g., docker.io"},
-				{name: "Tag", placeholder: "e.g., latest"},
-				{name: "ImagePullPolicy", placeholder: "e.g., Always, IfNotPresent"},
-			},
-		},
-		{
-			name: "IdaasOptions",
-			fields: []optionField{
-				{name: "Provider", placeholder: "e.g., okta, auth0"},
-				{name: "ClientID", placeholder: "your-client-id"},
-				{name: "ClientSecret", placeholder: "your-client-secret"},
-			},
-		},
-		{
-			name: "KafkaOptions",
-			fields: []optionField{
-				{name: "Brokers", placeholder: "e.g., localhost:9092"},
-				{name: "Topic", placeholder: "e.g., events"},
-				{name: "ConsumerGroup", placeholder: "e.g., my-group"},
+				{name: "DockerRegistry", placeholder: "Container registry URL (default: docker.io)"},
+				{name: "DockerTag", placeholder: "Container image tag (default: latest)"},
+				{name: "DockerPullPolicy", placeholder: "Image pull policy (default: IfNotPresent)"},
 			},
 		},
 		{
 			name: "ServiceOptions",
 			fields: []optionField{
-				{name: "Port", placeholder: "e.g., 8080"},
-				{name: "Protocol", placeholder: "e.g., http, grpc"},
-				{name: "ServiceType", placeholder: "e.g., ClusterIP, NodePort, LoadBalancer"},
-			},
-		},
-		{
-			name: "SftpOptions",
-			fields: []optionField{
-				{name: "Host", placeholder: "e.g., sftp.example.com"},
-				{name: "Port", placeholder: "e.g., 22"},
-				{name: "Username", placeholder: "e.g., admin"},
-			},
-		},
-		{
-			name: "BranchOptions",
-			fields: []optionField{
-				{name: "Branch", placeholder: "e.g., main, develop"},
-				{name: "CommitSHA", placeholder: "e.g., abc123"},
-				{name: "Repository", placeholder: "e.g., github.com/user/repo"},
+				{name: "ServicePort", placeholder: "Service port number (default: 8080)"},
+				{name: "ServiceType", placeholder: "Kubernetes service type (default: ClusterIP)"},
 			},
 		},
 	}
-
-	return &Tab{
-		client:           client,
-		history:          []models.EnvironmentHistory{},
-		selectedAction:   0,
-		actions: []string{
-			"Build Environment",
-			"Build Environment with Options",
-			"Destroy Environment",
-		},
-		textInput:        ti,
-		inputMode:        false,
-		currentScreen:    screenMainActions,
-		selectedCategory: 0,
-		optionCategories: categories,
-		selectedField:    0,
-	}
-}
-
-type historyLoadedMsg struct {
-	history []models.EnvironmentHistory
 }
 
 type operationLogsMsg struct {
@@ -160,14 +193,6 @@ func (e errMsg) Error() string {
 }
 
 type tickMsg time.Time
-
-func (t *Tab) loadHistory() tea.Msg {
-	history, err := t.client.GetEnvironmentHistory()
-	if err != nil {
-		return errMsg{err}
-	}
-	return historyLoadedMsg{history}
-}
 
 func (t *Tab) loadOperationLogs() tea.Msg {
 	if t.currentOperation == "" {
@@ -189,7 +214,7 @@ func tickCmd() tea.Cmd {
 }
 
 func (t *Tab) Init() tea.Cmd {
-	return tea.Batch(t.loadHistory, tickCmd())
+	return tickCmd()
 }
 
 func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -199,9 +224,6 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		t.width = msg.Width
 		t.height = msg.Height
-
-	case historyLoadedMsg:
-		t.history = msg.history
 
 	case operationLogsMsg:
 		if msg.logs != nil && msg.envName == t.currentOperation {
@@ -256,7 +278,7 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				t.textInput.Reset()
 			}
 			t.inputMode = false
-			return t, t.loadHistory
+			return t, nil
 		case "esc":
 			t.inputMode = false
 			t.textInput.Reset()
@@ -283,15 +305,6 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case 1: // Build Environment with Options
 				t.currentScreen = screenOptionCategories
 				t.selectedCategory = 0
-			case 2: // Destroy Environment
-				if len(t.history) > 0 {
-					envName := t.history[len(t.history)-1].Name
-					t.currentOperation = envName
-					t.operationLogs = []string{}
-					t.operationStatus = "running"
-					go t.client.DestroyEnvironment(envName)
-					return t, t.loadHistory
-				}
 			}
 		}
 	}
@@ -327,7 +340,7 @@ func (t *Tab) updateOptionCategories(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.operationStatus = "running"
 		go t.client.CreateEnvironment(envName, options)
 		t.currentScreen = screenMainActions
-		return t, t.loadHistory
+		return t, nil
 	}
 
 	return t, nil
@@ -413,7 +426,7 @@ func (t *Tab) getEnvironmentName() string {
 		}
 	}
 	// Generate default name with timestamp
-	return fmt.Sprintf("env-%d", len(t.history)+1)
+	return fmt.Sprintf("env-%d", time.Now().Unix())
 }
 
 func (t *Tab) getDeploymentOptions(envName string) *models.DeploymentOptions {
@@ -523,14 +536,13 @@ func (t *Tab) viewMainActions() string {
 		leftPanel.WriteString(historyStyle.Render("Press Enter to confirm, Esc to cancel"))
 	}
 
-	// Right panel - Operation Logs or History
+	// Right panel - Operation Logs
 	var rightPanel strings.Builder
 
-	if t.currentOperation != "" && len(t.operationLogs) > 0 {
-		// Show operation logs
-		rightPanel.WriteString(titleStyle.Render("Terraform Logs"))
-		rightPanel.WriteString("\n\n")
+	rightPanel.WriteString(titleStyle.Render("Terraform Logs"))
+	rightPanel.WriteString("\n\n")
 
+	if t.currentOperation != "" {
 		statusColor := "86"
 		if t.operationStatus == "failed" {
 			statusColor = "196"
@@ -564,29 +576,8 @@ func (t *Tab) viewMainActions() string {
 			rightPanel.WriteString("\n")
 		}
 	} else {
-		// Show history
-		rightPanel.WriteString(titleStyle.Render("Environment History"))
-		rightPanel.WriteString("\n\n")
-
-		if len(t.history) == 0 {
-			rightPanel.WriteString(historyStyle.Render("No environments launched yet"))
-		} else {
-			for i := len(t.history) - 1; i >= 0; i-- {
-				entry := t.history[i]
-				opts := ""
-				if entry.WithOptions {
-					opts = " [with options]"
-				}
-				text := fmt.Sprintf("• %s%s\n  %s - %s",
-					entry.Name,
-					opts,
-					entry.LaunchedAt.Format("15:04:05"),
-					entry.Status,
-				)
-				rightPanel.WriteString(historyItemStyle.Render(text))
-				rightPanel.WriteString("\n\n")
-			}
-		}
+		// No operation running
+		rightPanel.WriteString(historyStyle.Render("No operation running\n\nSelect an action to begin"))
 	}
 
 	// Combine panels

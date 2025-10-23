@@ -12,7 +12,7 @@ import (
 
 func main() {
 	mockMode := flag.Bool("mock", false, "Run in mock mode (local client)")
-	serverURL := flag.String("server", "", "Connect to Imperm server at URL (e.g., http://localhost:8080)")
+	serverURL := flag.String("server", "http://localhost:8080", "Connect to Imperm server at URL")
 	flag.Parse()
 
 	var c client.Client
@@ -20,15 +20,9 @@ func main() {
 	if *mockMode {
 		fmt.Println("Running in MOCK mode - using local mock client")
 		c = client.NewMockClient()
-	} else if *serverURL != "" {
+	} else {
 		fmt.Printf("Connecting to Imperm server at %s\n", *serverURL)
 		c = client.NewHTTPClient(*serverURL)
-	} else {
-		fmt.Println("Please specify either --mock or --server <url>")
-		fmt.Println("Examples:")
-		fmt.Println("  imperm-ui --mock")
-		fmt.Println("  imperm-ui --server http://localhost:8080")
-		os.Exit(1)
 	}
 
 	// Create and run the Bubble Tea program

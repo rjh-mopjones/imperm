@@ -63,6 +63,9 @@ type Tab struct {
 	currentStats        *models.ResourceStats
 	lastPodName         string // Track last pod name for logs refresh
 	lastDeploymentName  string // Track last deployment name for events refresh
+
+	// Error tracking
+	lastError error
 }
 
 func NewTab(client client.Client) *Tab {
@@ -263,6 +266,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.pods = msg.pods
 		t.deployments = msg.deployments
 		t.lastUpdate = time.Now()
+		t.lastError = nil // Clear any previous errors
 
 		// If we have a selected environment, update it with fresh data
 		if t.selectedEnvironment != nil {
@@ -315,6 +319,11 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statsLoadedMsg:
 		t.currentStats = msg.stats
+
+	case errMsg:
+		// Store the error so we can display it
+		t.lastError = msg.err
+		return t, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -408,7 +417,8 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.panelFocus = FocusTable
 			return t, t.loadDataForCurrentView()
 		case "r":
-			// Manual refresh
+			// Manual refresh - also clears errors
+			t.lastError = nil
 			return t, t.loadResources
 		case "a":
 			// Toggle auto-refresh

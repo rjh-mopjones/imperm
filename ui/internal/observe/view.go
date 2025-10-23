@@ -12,6 +12,15 @@ func (t *Tab) View() string {
 		return "Loading..."
 	}
 
+	// Show error if present
+	if t.lastError != nil {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true).
+			Padding(1, 2)
+		return errorStyle.Render(fmt.Sprintf("Error: %v\n\nPress 'r' to retry", t.lastError))
+	}
+
 	// Styles
 	cyanColor := lipgloss.Color("51")
 

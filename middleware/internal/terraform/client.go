@@ -95,7 +95,7 @@ func (c *TerraformClient) CreateEnvironment(name string, options *models.Deploym
 	return nil
 }
 
-// DestroyEnvironment destroys an environment using Terraform
+// DestroyEnvironment destroys an environment using Terraform or Kubernetes
 func (c *TerraformClient) DestroyEnvironment(name string) error {
 	// Create operation log
 	logStore := GetLogStore()
@@ -103,15 +103,29 @@ func (c *TerraformClient) DestroyEnvironment(name string) error {
 
 	envDir := filepath.Join(c.baseDir, name)
 
-	// Check if environment exists
-	opLog.AddLine("Checking if environment exists...")
+	// Check if Terraform working directory exists
+	opLog.AddLine("Checking for Terraform working directory...")
 	if _, err := os.Stat(envDir); os.IsNotExist(err) {
-		err := fmt.Errorf("environment %s does not exist", name)
-		opLog.SetFailed(err)
-		return err
+		// No Terraform directory - fall back to direct K8s deletion
+		opLog.AddLine("No Terraform directory found, using direct Kubernetes deletion...")
+		if err := c.k8sClient.DestroyEnvironment(name); err != nil {
+			opLog.SetFailed(err)
+			return err
+		}
+		opLog.SetCompleted()
+		opLog.AddLine("Environment destroyed successfully via Kubernetes API!")
+
+		// Clean up log after a short delay
+		go func() {
+			time.Sleep(30 * time.Second)
+			logStore.DeleteOperation(name)
+		}()
+
+		return nil
 	}
 
-	// Destroy Terraform resources
+	// Terraform directory exists - use Terraform destroy
+	opLog.AddLine("Found Terraform directory, using Terraform destroy...")
 	executor := NewExecutor(envDir)
 	executor.SetLogCallback(func(line string) {
 		opLog.AddLine(line)
