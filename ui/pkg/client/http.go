@@ -321,3 +321,25 @@ func (c *HTTPClient) DeleteDeployment(namespace, deploymentName string) error {
 
 	return nil
 }
+
+// GetOperationLogs fetches operation logs for an environment
+func (c *HTTPClient) GetOperationLogs(environmentName string) (*models.OperationLogs, error) {
+	url := fmt.Sprintf("%s/api/operations/logs?environment=%s", c.baseURL, environmentName)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch operation logs: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var logs models.OperationLogs
+	if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
+		return nil, fmt.Errorf("failed to decode logs: %w", err)
+	}
+
+	return &logs, nil
+}

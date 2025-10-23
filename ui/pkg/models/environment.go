@@ -70,3 +70,14 @@ type ResourceStats struct {
 	TotalPods         int
 	TotalDeployments  int
 }
+
+// OperationLogs represents logs from a Terraform operation
+type OperationLogs struct {
+	Environment string     `json:"environment"`
+	Operation   string     `json:"operation"`
+	Status      string     `json:"status"`
+	StartTime   time.Time  `json:"start_time"`
+	EndTime     *time.Time `json:"end_time"`
+	Error       string     `json:"error"`
+	Logs        []string   `json:"logs"`
+}

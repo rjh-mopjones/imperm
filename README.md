@@ -64,6 +64,84 @@ Terminal 2 - Start UI connected to server:
 make run-ui-remote
 ```
 
+**Option 3: Terraform Mode (DEFAULT)**
+
+Terraform mode is now the default! The server uses Terraform modules to provision Kubernetes namespaces and resources, providing infrastructure-as-code capabilities with state management.
+
+```bash
+# Run server (defaults to Terraform mode)
+make run-server
+
+# Or use other modes
+make run-server-mock    # Mock mode
+make run-server-k8s     # Direct K8s API mode
+```
+
+**Live Terraform Logs**: When creating or destroying environments from the UI, Terraform provisioning logs are streamed in real-time to the right panel of the control screen!
+
+## Terraform Integration
+
+### Overview
+
+The middleware can use Terraform to provision Kubernetes resources instead of directly using the K8s API. This provides:
+- **Infrastructure as Code**: All resources defined in Terraform configuration
+- **State Management**: Terraform tracks resource state
+- **Reproducibility**: Environments can be recreated from configuration
+- **Version Control**: Terraform configs can be versioned
+
+### Structure
+
+```
+terraform/
+├── modules/           # Reusable Terraform modules
+│   └── k8s-namespace/ # Module for creating K8s namespaces with resources
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── README.md
+└── environments/      # Generated configs for each environment
+    └── <env-name>/    # Created dynamically by middleware
+```
+
+### Prerequisites for Terraform Mode
+
+1. Install Terraform:
+```bash
+brew install terraform
+```
+
+2. Ensure you have a valid kubeconfig:
+```bash
+export KUBECONFIG=~/.kube/config
+# or set it in your environment
+```
+
+3. Verify Terraform installation:
+```bash
+terraform version
+```
+
+### How It Works
+
+1. When you create an environment via the API, the middleware:
+   - Generates a Terraform configuration in `terraform/environments/<env-name>/`
+   - Runs `terraform init` to initialize the workspace
+   - Runs `terraform apply` to create the resources
+
+2. When you destroy an environment:
+   - Runs `terraform destroy` to remove all resources
+   - Cleans up the environment directory
+
+### Running Modes
+
+The middleware supports three modes:
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Mock | `--mock` | Simulated data, no K8s connection |
+| K8s | (default) | Direct Kubernetes API calls |
+| Terraform | `--terraform` | Provision resources via Terraform |
+
 ## Project Structure
 
 ### UI (`ui/`)
@@ -96,7 +174,8 @@ middleware/
 ├── cmd/           # Main entry point
 ├── internal/      # Server-specific code
 │   ├── api/       # HTTP handlers
-│   ├── k8s/       # Kubernetes client (TODO)
+│   ├── k8s/       # Kubernetes client
+│   ├── terraform/ # Terraform client
 │   └── store/     # State management (TODO)
 └── pkg/           # Shared code (client, models)
 ```

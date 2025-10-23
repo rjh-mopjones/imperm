@@ -327,3 +327,13 @@ func (m *MockClient) DeleteDeployment(namespace, deploymentName string) error {
 	}
 	return fmt.Errorf("deployment %s not found in namespace %s", deploymentName, namespace)
 }
+
+func (m *MockClient) GetOperationLogs(environmentName string) (*models.OperationLogs, error) {
+	// Return mock logs (empty since mock mode doesn't actually provision anything)
+	return &models.OperationLogs{
+		Environment: environmentName,
+		Operation:   "create",
+		Status:      "not_found",
+		Logs:        []string{},
+	}, nil
+}

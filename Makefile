@@ -13,10 +13,11 @@ help:
 	@echo "  make clean      - Remove all build artifacts"
 	@echo ""
 	@echo "Running (Development):"
-	@echo "  make run-ui            - Run UI in mock mode (standalone)"
-	@echo "  make run-server        - Run server in mock mode"
-	@echo "  make run-ui-remote     - Run UI connected to server"
-	@echo "  make run-server-k8s    - Run server with real K8s (when implemented)"
+	@echo "  make run-ui        - Run UI in mock mode (standalone)"
+	@echo "  make run-server    - Run server in Terraform mode (default)"
+	@echo "  make run-ui-remote - Run UI connected to server"
+	@echo "  make run-server-k8s  - Run server with direct K8s API"
+	@echo "  make run-server-mock - Run server in mock mode"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test       - Run tests for both modules"
@@ -50,12 +51,16 @@ run-ui-remote:
 	@cd ui && go run ./cmd --server http://localhost:8080
 
 run-server:
-	@echo "Running server in mock mode on port 8080..."
-	@cd middleware && go run ./cmd --mock --port 8080
+	@echo "Running server in Terraform mode (default) on port 8080..."
+	@cd middleware && go run ./cmd --port 8080
 
 run-server-k8s:
-	@echo "Running server with real Kubernetes..."
-	@cd middleware && go run ./cmd --port 8080
+	@echo "Running server with direct Kubernetes API..."
+	@cd middleware && go run ./cmd --k8s --port 8080
+
+run-server-mock:
+	@echo "Running server in mock mode on port 8080..."
+	@cd middleware && go run ./cmd --mock --port 8080
 
 # Test targets
 test: test-ui test-server

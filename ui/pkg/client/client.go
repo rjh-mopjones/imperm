@@ -27,4 +27,7 @@ type Client interface {
 
 	// History
 	GetEnvironmentHistory() ([]models.EnvironmentHistory, error)
+
+	// Operation logs
+	GetOperationLogs(environmentName string) (*models.OperationLogs, error)
 }

@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"imperm-middleware/internal/k8s"
+	"imperm-middleware/internal/terraform"
 	"imperm-middleware/pkg/client"
 )
 
@@ -13,13 +16,39 @@ type Handler struct {
 	client client.Client
 }
 
-func NewHandler(mockMode bool) *Handler {
+type HandlerMode string
+
+const (
+	ModeMock      HandlerMode = "mock"
+	ModeK8s       HandlerMode = "k8s"
+	ModeTerraform HandlerMode = "terraform"
+)
+
+func NewHandler(mode HandlerMode) *Handler {
 	var c client.Client
 
-	if mockMode {
+	switch mode {
+	case ModeMock:
 		log.Println("Initializing mock client...")
 		c = client.NewMockClient()
-	} else {
+
+	case ModeTerraform:
+		log.Println("Initializing Terraform client...")
+
+		// Get paths
+		projectRoot := getProjectRoot()
+		terraformDir := filepath.Join(projectRoot, "terraform", "environments")
+		modulePath := filepath.Join(projectRoot, "terraform", "modules", "k8s-namespace")
+		kubeconfig := getKubeconfig()
+
+		tfClient, err := terraform.NewClient(terraformDir, modulePath, kubeconfig)
+		if err != nil {
+			log.Fatalf("Failed to create Terraform client: %v", err)
+		}
+		c = tfClient
+		log.Println("Successfully initialized Terraform client")
+
+	default: // ModeK8s
 		log.Println("Initializing Kubernetes client...")
 		k8sClient, err := k8s.NewClient()
 		if err != nil {
@@ -32,6 +61,54 @@ func NewHandler(mockMode bool) *Handler {
 	return &Handler{
 		client: c,
 	}
+}
+
+// getProjectRoot returns the project root directory
+func getProjectRoot() string {
+	// Try to get from environment variable first
+	if root := os.Getenv("IMPERM_PROJECT_ROOT"); root != "" {
+		return root
+	}
+
+	// Otherwise use current working directory and go up until we find terraform/
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Warning: failed to get working directory: %v", err)
+		return "."
+	}
+
+	// Walk up the directory tree looking for the terraform directory
+	dir := cwd
+	for {
+		tfDir := filepath.Join(dir, "terraform")
+		if _, err := os.Stat(tfDir); err == nil {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root, use cwd
+			return cwd
+		}
+		dir = parent
+	}
+}
+
+// getKubeconfig returns the path to the kubeconfig file
+func getKubeconfig() string {
+	// Try KUBECONFIG environment variable first
+	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
+		return kubeconfig
+	}
+
+	// Default to ~/.kube/config
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("Warning: failed to get home directory: %v", err)
+		return ""
+	}
+
+	return filepath.Join(home, ".kube", "config")
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -52,6 +129,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Stats endpoints
 	mux.HandleFunc("/api/stats", h.handleStats)
+
+	// Terraform operation logs
+	mux.HandleFunc("/api/operations/logs", h.handleOperationLogs)
 
 	// Health check
 	mux.HandleFunc("/health", h.handleHealth)
@@ -298,6 +378,47 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, map[string]string{
 		"status": "healthy",
+	})
+}
+
+func (h *Handler) handleOperationLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	envName := r.URL.Query().Get("environment")
+	if envName == "" {
+		http.Error(w, "environment parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	logStore := terraform.GetLogStore()
+	opLog := logStore.GetOperation(envName)
+
+	if opLog == nil {
+		respondJSON(w, map[string]interface{}{
+			"environment": envName,
+			"status":      "not_found",
+			"logs":        []string{},
+		})
+		return
+	}
+
+	lines := opLog.GetLines()
+	logStrings := make([]string, len(lines))
+	for i, line := range lines {
+		logStrings[i] = line.Content
+	}
+
+	respondJSON(w, map[string]interface{}{
+		"environment": opLog.EnvironmentName,
+		"operation":   opLog.Operation,
+		"status":      opLog.GetStatus(),
+		"start_time":  opLog.StartTime,
+		"end_time":    opLog.EndTime,
+		"error":       opLog.Error,
+		"logs":        logStrings,
 	})
 }
 
