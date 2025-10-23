@@ -293,3 +293,37 @@ func (m *MockClient) ListDeployments(namespace string) ([]models.Deployment, err
 func (m *MockClient) GetEnvironmentHistory() ([]models.EnvironmentHistory, error) {
 	return m.history, nil
 }
+
+func (m *MockClient) DeletePod(namespace, podName string) error {
+	// Find and remove the pod from environments
+	for i := range m.environments {
+		env := &m.environments[i]
+		if env.Namespace == namespace {
+			for j, pod := range env.Pods {
+				if pod.Name == podName {
+					// Remove pod from slice
+					env.Pods = append(env.Pods[:j], env.Pods[j+1:]...)
+					return nil
+				}
+			}
+		}
+	}
+	return fmt.Errorf("pod %s not found in namespace %s", podName, namespace)
+}
+
+func (m *MockClient) DeleteDeployment(namespace, deploymentName string) error {
+	// Find and remove the deployment from environments
+	for i := range m.environments {
+		env := &m.environments[i]
+		if env.Namespace == namespace {
+			for j, dep := range env.Deployments {
+				if dep.Name == deploymentName {
+					// Remove deployment from slice
+					env.Deployments = append(env.Deployments[:j], env.Deployments[j+1:]...)
+					return nil
+				}
+			}
+		}
+	}
+	return fmt.Errorf("deployment %s not found in namespace %s", deploymentName, namespace)
+}

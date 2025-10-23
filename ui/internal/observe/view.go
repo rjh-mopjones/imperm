@@ -137,7 +137,7 @@ func (t *Tab) View() string {
 	// Help text
 	var helpText string
 	if t.panelFocus == FocusTable {
-		helpText = "[→/l] Right Panel  [e/p/d] Views  [Enter] Drill-down  [↑↓/jk] Navigate  [1-4] Quick Switch  [r] Refresh  [q] Quit"
+		helpText = "[→/l] Right Panel  [e/p/d] Views  [Enter] Drill-down  [↑↓/jk] Navigate  [x] Delete  [r] Refresh  [q] Quit"
 	} else {
 		helpText = "[←/h] Back  [→←/hl] Cycle Views  [↑↓/jk] Scroll  [1] Details  [2] Logs  [3] Events  [4] Stats  [q] Quit"
 	}

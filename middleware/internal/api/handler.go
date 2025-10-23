@@ -138,35 +138,69 @@ func (h *Handler) handleEnvironmentHistory(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handler) handlePods(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		namespace := r.URL.Query().Get("namespace")
+		pods, err := h.client.ListPods(namespace)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, pods)
+
+	case http.MethodDelete:
+		namespace := r.URL.Query().Get("namespace")
+		podName := r.URL.Query().Get("pod")
+
+		if namespace == "" || podName == "" {
+			http.Error(w, "namespace and pod parameters are required", http.StatusBadRequest)
+			return
+		}
+
+		err := h.client.DeletePod(namespace, podName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		respondJSON(w, map[string]string{"status": "deleted"})
+
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-
-	namespace := r.URL.Query().Get("namespace")
-	pods, err := h.client.ListPods(namespace)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	respondJSON(w, pods)
 }
 
 func (h *Handler) handleDeployments(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		namespace := r.URL.Query().Get("namespace")
+		deployments, err := h.client.ListDeployments(namespace)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, deployments)
+
+	case http.MethodDelete:
+		namespace := r.URL.Query().Get("namespace")
+		deploymentName := r.URL.Query().Get("deployment")
+
+		if namespace == "" || deploymentName == "" {
+			http.Error(w, "namespace and deployment parameters are required", http.StatusBadRequest)
+			return
+		}
+
+		err := h.client.DeleteDeployment(namespace, deploymentName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		respondJSON(w, map[string]string{"status": "deleted"})
+
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-
-	namespace := r.URL.Query().Get("namespace")
-	deployments, err := h.client.ListDeployments(namespace)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	respondJSON(w, deployments)
 }
 
 func (h *Handler) handlePodLogs(w http.ResponseWriter, r *http.Request) {

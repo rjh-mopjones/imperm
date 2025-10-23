@@ -281,3 +281,43 @@ func (c *HTTPClient) GetEnvironmentHistory() ([]models.EnvironmentHistory, error
 
 	return history, nil
 }
+
+func (c *HTTPClient) DeletePod(namespace, podName string) error {
+	url := fmt.Sprintf("%s/api/pods?namespace=%s&pod=%s", c.baseURL, namespace, podName)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete pod: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func (c *HTTPClient) DeleteDeployment(namespace, deploymentName string) error {
+	url := fmt.Sprintf("%s/api/deployments?namespace=%s&deployment=%s", c.baseURL, namespace, deploymentName)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete deployment: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
+}

@@ -62,3 +62,11 @@ func (c *K8sClient) GetDeploymentEvents(namespace, deploymentName string) ([]mod
 
 	return events, nil
 }
+
+// DeleteDeployment deletes a deployment in the specified namespace
+func (c *K8sClient) DeleteDeployment(namespace, deploymentName string) error {
+	deletePolicy := metav1.DeletePropagationForeground
+	return c.clientset.AppsV1().Deployments(namespace).Delete(c.ctx, deploymentName, metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+}

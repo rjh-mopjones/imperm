@@ -139,6 +139,14 @@ func (c *K8sClient) GetPodEvents(namespace, podName string) ([]models.Event, err
 	return events, nil
 }
 
+// DeletePod deletes a pod in the specified namespace
+func (c *K8sClient) DeletePod(namespace, podName string) error {
+	deletePolicy := metav1.DeletePropagationForeground
+	return c.clientset.CoreV1().Pods(namespace).Delete(c.ctx, podName, metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+}
+
 // int64Ptr is a helper to get pointer to int64
 func int64Ptr(i int64) *int64 {
 	return &i

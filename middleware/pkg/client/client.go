@@ -15,10 +15,12 @@ type Client interface {
 	ListPods(namespace string) ([]models.Pod, error)
 	GetPodLogs(namespace, podName string) (string, error)
 	GetPodEvents(namespace, podName string) ([]models.Event, error)
+	DeletePod(namespace, podName string) error
 
 	// Deployment operations
 	ListDeployments(namespace string) ([]models.Deployment, error)
 	GetDeploymentEvents(namespace, deploymentName string) ([]models.Event, error)
+	DeleteDeployment(namespace, deploymentName string) error
 
 	// Stats operations
 	GetResourceStats(resourceType, namespace string) (*models.ResourceStats, error)

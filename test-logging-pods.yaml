@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-logging
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: constant-logger
+  namespace: test-logging
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: constant-logger
+  template:
+    metadata:
+      labels:
+        app: constant-logger
+    spec:
+      containers:
+      - name: logger
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            counter=0
+            while true; do
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] Log entry #$counter - This is a constant log message from $(hostname)"
+              counter=$((counter + 1))
+              sleep 2
+            done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fast-logger
+  namespace: test-logging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fast-logger
+  template:
+    metadata:
+      labels:
+        app: fast-logger
+    spec:
+      containers:
+      - name: logger
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            counter=0
+            while true; do
+              echo "[FAST] $(date '+%H:%M:%S') - Event #$counter | Status: OK | Pod: $(hostname)"
+              counter=$((counter + 1))
+              sleep 0.5
+            done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: error-logger
+  namespace: test-logging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: error-logger
+  template:
+    metadata:
+      labels:
+        app: error-logger
+    spec:
+      containers:
+      - name: logger
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            counter=0
+            while true; do
+              if [ $((counter % 5)) -eq 0 ]; then
+                echo "[ERROR] $(date) - Something went wrong! Error code: $counter"
+              else
+                echo "[INFO] $(date) - Normal operation, counter: $counter"
+              fi
+              counter=$((counter + 1))
+              sleep 3
+            done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: json-logger
+  namespace: test-logging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: json-logger
+  template:
+    metadata:
+      labels:
+        app: json-logger
+    spec:
+      containers:
+      - name: logger
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            counter=0
+            while true; do
+              echo "{\"timestamp\":\"$(date -Iseconds)\",\"level\":\"info\",\"message\":\"Processing request\",\"request_id\":\"$counter\",\"pod\":\"$(hostname)\",\"status\":\"success\"}"
+              counter=$((counter + 1))
+              sleep 1
+            done

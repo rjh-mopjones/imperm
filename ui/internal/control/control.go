@@ -61,8 +61,11 @@ func NewTab(client client.Client) *Tab {
 			name: "DeployOptions",
 			fields: []optionField{
 				{name: "Name", placeholder: "environment-name (leave empty for auto-generated)"},
-				{name: "DeploymentType", placeholder: "e.g., rolling, blue-green"},
-				{name: "Replicas", placeholder: "e.g., 3"},
+				{name: "Namespace", placeholder: "e.g., default, test-logging"},
+				{name: "ConstantLogger", placeholder: "replicas (e.g., 3) - logs every 2s"},
+				{name: "FastLogger", placeholder: "replicas (e.g., 2) - logs every 0.5s"},
+				{name: "ErrorLogger", placeholder: "replicas (e.g., 1) - mixed INFO/ERROR logs"},
+				{name: "JsonLogger", placeholder: "replicas (e.g., 2) - JSON formatted logs"},
 			},
 		},
 		{
@@ -70,6 +73,7 @@ func NewTab(client client.Client) *Tab {
 			fields: []optionField{
 				{name: "Registry", placeholder: "e.g., docker.io"},
 				{name: "Tag", placeholder: "e.g., latest"},
+				{name: "ImagePullPolicy", placeholder: "e.g., Always, IfNotPresent"},
 			},
 		},
 		{
@@ -77,6 +81,7 @@ func NewTab(client client.Client) *Tab {
 			fields: []optionField{
 				{name: "Provider", placeholder: "e.g., okta, auth0"},
 				{name: "ClientID", placeholder: "your-client-id"},
+				{name: "ClientSecret", placeholder: "your-client-secret"},
 			},
 		},
 		{
@@ -84,6 +89,7 @@ func NewTab(client client.Client) *Tab {
 			fields: []optionField{
 				{name: "Brokers", placeholder: "e.g., localhost:9092"},
 				{name: "Topic", placeholder: "e.g., events"},
+				{name: "ConsumerGroup", placeholder: "e.g., my-group"},
 			},
 		},
 		{
@@ -91,6 +97,7 @@ func NewTab(client client.Client) *Tab {
 			fields: []optionField{
 				{name: "Port", placeholder: "e.g., 8080"},
 				{name: "Protocol", placeholder: "e.g., http, grpc"},
+				{name: "ServiceType", placeholder: "e.g., ClusterIP, NodePort, LoadBalancer"},
 			},
 		},
 		{
@@ -98,6 +105,7 @@ func NewTab(client client.Client) *Tab {
 			fields: []optionField{
 				{name: "Host", placeholder: "e.g., sftp.example.com"},
 				{name: "Port", placeholder: "e.g., 22"},
+				{name: "Username", placeholder: "e.g., admin"},
 			},
 		},
 		{
@@ -105,6 +113,7 @@ func NewTab(client client.Client) *Tab {
 			fields: []optionField{
 				{name: "Branch", placeholder: "e.g., main, develop"},
 				{name: "CommitSHA", placeholder: "e.g., abc123"},
+				{name: "Repository", placeholder: "e.g., github.com/user/repo"},
 			},
 		},
 	}

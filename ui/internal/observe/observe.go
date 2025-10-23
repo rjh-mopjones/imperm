@@ -57,9 +57,11 @@ type Tab struct {
 	scrollOffset int
 
 	// Right panel data
-	currentLogs   string
-	currentEvents []models.Event
-	currentStats  *models.ResourceStats
+	currentLogs         string
+	currentEvents       []models.Event
+	currentStats        *models.ResourceStats
+	lastPodName         string // Track last pod name for logs refresh
+	lastDeploymentName  string // Track last deployment name for events refresh
 }
 
 func NewTab(client client.Client) *Tab {
@@ -84,7 +86,8 @@ type resourcesLoadedMsg struct {
 }
 
 type logsLoadedMsg struct {
-	logs string
+	logs    string
+	podName string
 }
 
 type eventsLoadedMsg struct {
@@ -122,12 +125,12 @@ func (t *Tab) loadLogs() tea.Cmd {
 	return func() tea.Msg {
 		resource := t.getSelectedResource()
 		if resource == nil {
-			return logsLoadedMsg{logs: ""}
+			return logsLoadedMsg{logs: "", podName: ""}
 		}
 
 		pod, ok := resource.(models.Pod)
 		if !ok {
-			return logsLoadedMsg{logs: "Logs are only available for pods"}
+			return logsLoadedMsg{logs: "Logs are only available for pods", podName: ""}
 		}
 
 		logs, err := t.client.GetPodLogs(pod.Namespace, pod.Name)
@@ -135,7 +138,7 @@ func (t *Tab) loadLogs() tea.Cmd {
 			return errMsg{err}
 		}
 
-		return logsLoadedMsg{logs: logs}
+		return logsLoadedMsg{logs: logs, podName: pod.Name}
 	}
 }
 
@@ -165,6 +168,48 @@ func (t *Tab) loadEvents() tea.Cmd {
 		}
 
 		return eventsLoadedMsg{events: events}
+	}
+}
+
+func (t *Tab) deleteSelectedResource() tea.Cmd {
+	return func() tea.Msg {
+		switch t.currentResource {
+		case ResourceEnvironments:
+			if t.selectedIndex < len(t.environments) {
+				env := t.environments[t.selectedIndex]
+				if err := t.client.DestroyEnvironment(env.Name); err != nil {
+					return errMsg{err}
+				}
+			}
+		case ResourcePods:
+			var pods []models.Pod
+			if t.selectedEnvironment != nil {
+				pods = t.selectedEnvironment.Pods
+			} else {
+				pods = t.pods
+			}
+			if t.selectedIndex < len(pods) {
+				pod := pods[t.selectedIndex]
+				if err := t.client.DeletePod(pod.Namespace, pod.Name); err != nil {
+					return errMsg{err}
+				}
+			}
+		case ResourceDeployments:
+			var deployments []models.Deployment
+			if t.selectedEnvironment != nil {
+				deployments = t.selectedEnvironment.Deployments
+			} else {
+				deployments = t.deployments
+			}
+			if t.selectedIndex < len(deployments) {
+				dep := deployments[t.selectedIndex]
+				if err := t.client.DeleteDeployment(dep.Namespace, dep.Name); err != nil {
+					return errMsg{err}
+				}
+			}
+		}
+		// Reload resources after deletion
+		return t.loadResources()
 	}
 }
 
@@ -207,6 +252,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if t.autoRefresh {
+			// Reload resources and also reload current view data (logs, events, etc.)
 			return t, tea.Batch(t.loadResources, t.tick())
 		}
 		return t, t.tick()
@@ -240,7 +286,12 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, tea.Batch(t.loadStats(), t.loadDataForCurrentView())
 
 	case logsLoadedMsg:
+		// If the pod name changed, reset scroll to top
+		if t.lastPodName != "" && t.lastPodName != msg.podName {
+			t.scrollOffset = 0
+		}
 		t.currentLogs = msg.logs
+		t.lastPodName = msg.podName
 
 	case eventsLoadedMsg:
 		t.currentEvents = msg.events
@@ -345,6 +396,11 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			// Toggle auto-refresh
 			t.autoRefresh = !t.autoRefresh
+		case "x":
+			// Delete selected resource
+			if t.panelFocus == FocusTable {
+				return t, t.deleteSelectedResource()
+			}
 		case "1":
 			// Quick switch to Details view (without changing focus)
 			t.rightPanelView = RightPanelDetails
