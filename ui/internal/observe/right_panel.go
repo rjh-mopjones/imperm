@@ -8,6 +8,11 @@ import (
 )
 
 func (t *Tab) renderRightPanel(height int) string {
+	// Calculate panel width (we'll use this for line truncation)
+	panelWidth := (t.width / 2) - 8 // Half screen minus borders and padding
+	if panelWidth < 40 {
+		panelWidth = 40 // Minimum width to prevent issues
+	}
 	// View list items
 	views := []struct {
 		name string
@@ -121,6 +126,9 @@ func (t *Tab) renderRightPanel(height int) string {
 
 	// Calculate available height for content (subtract numbers, view list, separator, title)
 	availableHeight := height - 6
+	if availableHeight < 5 {
+		availableHeight = 5 // Minimum height to prevent issues
+	}
 
 	// Ensure scroll offset is within bounds
 	maxOffset := len(lines) - availableHeight
@@ -138,6 +146,19 @@ func (t *Tab) renderRightPanel(height int) string {
 	}
 
 	visibleLines := lines[t.scrollOffset:endLine]
+
+	// Ensure we don't exceed available height
+	if len(visibleLines) > availableHeight {
+		visibleLines = visibleLines[:availableHeight]
+	}
+
+	// Truncate each line to fit within panel width to prevent wrapping
+	for i, line := range visibleLines {
+		if len(line) > panelWidth {
+			visibleLines[i] = line[:panelWidth-3] + "..."
+		}
+	}
+
 	content.WriteString(strings.Join(visibleLines, "\n"))
 
 	return content.String()

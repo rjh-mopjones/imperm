@@ -52,6 +52,10 @@ type Tab struct {
 	currentOperation     string
 	operationLogs        []string
 	operationStatus      string
+
+	// Log panel focus and scrolling
+	logPanelFocused      bool
+	logScrollOffset      int
 }
 
 func NewTab(client client.Client) *Tab {
@@ -229,16 +233,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.logs != nil && msg.envName == t.currentOperation {
 			t.operationLogs = msg.logs.Logs
 			t.operationStatus = msg.logs.Status
-
-			// Clear current operation if completed or failed
-			if msg.logs.Status == "completed" || msg.logs.Status == "failed" {
-				go func() {
-					time.Sleep(5 * time.Second)
-					t.currentOperation = ""
-					t.operationLogs = []string{}
-					t.operationStatus = ""
-				}()
-			}
+			// Logs are now persistent and won't be cleared automatically
 		}
 
 	case tickMsg:
@@ -286,6 +281,20 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			t.textInput, cmd = t.textInput.Update(msg)
 			return t, cmd
 		}
+	} else if t.logPanelFocused {
+		// Handle log panel navigation
+		switch msg.String() {
+		case "up", "k":
+			if t.logScrollOffset > 0 {
+				t.logScrollOffset--
+			}
+		case "down", "j":
+			t.logScrollOffset++
+		case "left", "h", "esc":
+			// Exit log panel focus
+			t.logPanelFocused = false
+			t.logScrollOffset = 0
+		}
 	} else {
 		switch msg.String() {
 		case "up", "k":
@@ -295,6 +304,12 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			if t.selectedAction < len(t.actions)-1 {
 				t.selectedAction++
+			}
+		case "right", "l":
+			// Focus log panel if there are logs
+			if t.currentOperation != "" && len(t.operationLogs) > 0 {
+				t.logPanelFocused = true
+				t.logScrollOffset = 0
 			}
 		case "enter":
 			switch t.selectedAction {
@@ -534,12 +549,27 @@ func (t *Tab) viewMainActions() string {
 		leftPanel.WriteString(t.textInput.View())
 		leftPanel.WriteString("\n\n")
 		leftPanel.WriteString(historyStyle.Render("Press Enter to confirm, Esc to cancel"))
+	} else if !t.logPanelFocused {
+		// Show help text when not in input mode and logs not focused
+		leftPanel.WriteString("\n")
+		leftPanel.WriteString(historyStyle.Render("[↑↓/jk] Navigate  [→/l] View Logs  [Enter] Select"))
+	} else {
+		// Show help text when logs are focused
+		leftPanel.WriteString("\n")
+		leftPanel.WriteString(historyStyle.Render("[←/h/Esc] Back  [↑↓/jk] Scroll Logs"))
 	}
 
 	// Right panel - Operation Logs
 	var rightPanel strings.Builder
 
-	rightPanel.WriteString(titleStyle.Render("Terraform Logs"))
+	// Title color changes based on focus
+	logTitleColor := lipgloss.Color("245") // Grey when not focused
+	if t.logPanelFocused {
+		logTitleColor = lipgloss.Color("51") // Cyan when focused
+	}
+	logTitleStyle := titleStyle.Copy().Foreground(logTitleColor)
+
+	rightPanel.WriteString(logTitleStyle.Render("Terraform Logs"))
 	rightPanel.WriteString("\n\n")
 
 	if t.currentOperation != "" {
@@ -561,19 +591,55 @@ func (t *Tab) viewMainActions() string {
 			),
 		))
 
-		// Show logs (last 20 lines to fit in panel)
+		// Show logs (auto-scroll to bottom, showing most recent)
 		logStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("250")).
 			Width(rightWidth - 6)
 
-		startIdx := 0
-		if len(t.operationLogs) > 20 {
-			startIdx = len(t.operationLogs) - 20
+		// Calculate available height for logs (subtract title, status, padding)
+		availableLines := t.height - 12
+		if availableLines < 5 {
+			availableLines = 5
 		}
 
-		for i := startIdx; i < len(t.operationLogs); i++ {
+		// If in scroll mode, use scroll offset; otherwise auto-follow (show last N lines)
+		var startIdx, endIdx int
+		if t.logPanelFocused {
+			// Manual scroll mode - respect scroll offset
+			maxOffset := len(t.operationLogs) - availableLines
+			if maxOffset < 0 {
+				maxOffset = 0
+			}
+			if t.logScrollOffset > maxOffset {
+				t.logScrollOffset = maxOffset
+			}
+			startIdx = t.logScrollOffset
+			endIdx = startIdx + availableLines
+			if endIdx > len(t.operationLogs) {
+				endIdx = len(t.operationLogs)
+			}
+		} else {
+			// Auto-follow mode - show last N lines
+			if len(t.operationLogs) > availableLines {
+				startIdx = len(t.operationLogs) - availableLines
+			} else {
+				startIdx = 0
+			}
+			endIdx = len(t.operationLogs)
+		}
+
+		for i := startIdx; i < endIdx; i++ {
 			rightPanel.WriteString(logStyle.Render(t.operationLogs[i]))
 			rightPanel.WriteString("\n")
+		}
+
+		// Show scroll indicator only when in manual scroll mode
+		if t.logPanelFocused && len(t.operationLogs) > availableLines {
+			scrollInfo := fmt.Sprintf("[%d-%d/%d]", startIdx+1, endIdx, len(t.operationLogs))
+			rightPanel.WriteString("\n")
+			rightPanel.WriteString(lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Render(scrollInfo))
 		}
 	} else {
 		// No operation running

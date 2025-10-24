@@ -43,7 +43,11 @@ func (t *Tab) renderEnvironmentsTable(headerStyle, rowStyle, selectedStyle lipgl
 	}
 
 	if len(t.environments) == 0 {
-		table.WriteString(rowStyle.Render("No environments found"))
+		if t.isLoading {
+			table.WriteString(rowStyle.Render("Loading environments..."))
+		} else {
+			table.WriteString(rowStyle.Render("No environments found"))
+		}
 	}
 
 	return table.String()
@@ -96,7 +100,11 @@ func (t *Tab) renderPodsTable(headerStyle, rowStyle, selectedStyle lipgloss.Styl
 	}
 
 	if len(pods) == 0 {
-		table.WriteString(rowStyle.Render("No pods found"))
+		if t.isLoading {
+			table.WriteString(rowStyle.Render("Loading pods..."))
+		} else {
+			table.WriteString(rowStyle.Render("No pods found"))
+		}
 	}
 
 	return table.String()
@@ -145,7 +153,11 @@ func (t *Tab) renderDeploymentsTable(headerStyle, rowStyle, selectedStyle lipglo
 	}
 
 	if len(deployments) == 0 {
-		table.WriteString(rowStyle.Render("No deployments found"))
+		if t.isLoading {
+			table.WriteString(rowStyle.Render("Loading deployments..."))
+		} else {
+			table.WriteString(rowStyle.Render("No deployments found"))
+		}
 	}
 
 	return table.String()

@@ -51,6 +51,9 @@ func getKubeConfig() (*rest.Config, error) {
 	// Try in-cluster config first (for when running inside K8s)
 	config, err := rest.InClusterConfig()
 	if err == nil {
+		// Increase rate limits to avoid throttling
+		config.QPS = 100    // Default is 5
+		config.Burst = 200  // Default is 10
 		return config, nil
 	}
 
@@ -68,6 +71,11 @@ func getKubeConfig() (*rest.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
 	}
+
+	// Increase rate limits to avoid client-side throttling
+	// Default QPS is 5 and Burst is 10, which is way too low for our use case
+	config.QPS = 100    // Allow up to 100 queries per second
+	config.Burst = 200  // Allow bursts of up to 200 requests
 
 	return config, nil
 }

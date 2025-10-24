@@ -67,6 +67,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Switch tabs
 			if m.currentTab == tabControl {
 				m.currentTab = tabObserve
+				// Auto-load environments when switching to observe tab
+				return m, m.observeTab.Init()
 			} else {
 				m.currentTab = tabControl
 			}

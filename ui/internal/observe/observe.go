@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"fmt"
 	"imperm-ui/pkg/client"
 	"imperm-ui/pkg/models"
 	"strings"
@@ -66,6 +67,13 @@ type Tab struct {
 
 	// Error tracking
 	lastError error
+
+	// Status message
+	statusMessage string
+	statusTime    time.Time
+
+	// Loading state
+	isLoading bool
 }
 
 func NewTab(client client.Client) *Tab {
@@ -78,6 +86,7 @@ func NewTab(client client.Client) *Tab {
 		selectedIndex:   0,
 		autoRefresh:     true,
 		refreshInterval: 5 * time.Second,
+		isLoading:       true, // Start in loading state
 	}
 }
 
@@ -101,6 +110,8 @@ type eventsLoadedMsg struct {
 type statsLoadedMsg struct {
 	stats *models.ResourceStats
 }
+
+type clearStatusMsg struct{}
 
 func (t *Tab) loadResources() tea.Msg {
 	envs, err := t.client.ListEnvironments()
@@ -177,10 +188,15 @@ func (t *Tab) loadEvents() tea.Cmd {
 
 func (t *Tab) deleteSelectedResource() tea.Cmd {
 	return func() tea.Msg {
+		var deletedName string
+		var resourceType string
+
 		switch t.currentResource {
 		case ResourceEnvironments:
 			if t.selectedIndex < len(t.environments) {
 				env := t.environments[t.selectedIndex]
+				deletedName = env.Name
+				resourceType = "environment"
 				if err := t.client.DestroyEnvironment(env.Name); err != nil {
 					return errMsg{err}
 				}
@@ -194,6 +210,8 @@ func (t *Tab) deleteSelectedResource() tea.Cmd {
 			}
 			if t.selectedIndex < len(pods) {
 				pod := pods[t.selectedIndex]
+				deletedName = pod.Name
+				resourceType = "pod"
 				if err := t.client.DeletePod(pod.Namespace, pod.Name); err != nil {
 					return errMsg{err}
 				}
@@ -207,14 +225,29 @@ func (t *Tab) deleteSelectedResource() tea.Cmd {
 			}
 			if t.selectedIndex < len(deployments) {
 				dep := deployments[t.selectedIndex]
+				deletedName = dep.Name
+				resourceType = "deployment"
 				if err := t.client.DeleteDeployment(dep.Namespace, dep.Name); err != nil {
 					return errMsg{err}
 				}
 			}
 		}
+
+		// Set status message
+		if deletedName != "" {
+			t.statusMessage = fmt.Sprintf("Deleted %s: %s", resourceType, deletedName)
+			t.statusTime = time.Now()
+		}
+
 		// Reload resources after deletion
 		return t.loadResources()
 	}
+}
+
+func (t *Tab) clearStatusAfterDelay() tea.Cmd {
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return clearStatusMsg{}
+	})
 }
 
 func (t *Tab) loadStats() tea.Cmd {
@@ -267,6 +300,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.deployments = msg.deployments
 		t.lastUpdate = time.Now()
 		t.lastError = nil // Clear any previous errors
+		t.isLoading = false // Data loaded successfully
 
 		// If we have a selected environment, update it with fresh data
 		if t.selectedEnvironment != nil {
@@ -323,6 +357,12 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		// Store the error so we can display it
 		t.lastError = msg.err
+		t.isLoading = false // Stop loading on error
+		return t, nil
+
+	case clearStatusMsg:
+		// Clear the status message
+		t.statusMessage = ""
 		return t, nil
 
 	case tea.KeyMsg:
@@ -419,6 +459,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			// Manual refresh - also clears errors
 			t.lastError = nil
+			t.isLoading = true
 			return t, t.loadResources
 		case "a":
 			// Toggle auto-refresh
@@ -426,7 +467,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "x":
 			// Delete selected resource
 			if t.panelFocus == FocusTable {
-				return t, t.deleteSelectedResource()
+				return t, tea.Batch(t.deleteSelectedResource(), t.clearStatusAfterDelay())
 			}
 		case "1":
 			// Quick switch to Details view (without changing focus)

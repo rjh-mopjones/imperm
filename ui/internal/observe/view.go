@@ -97,7 +97,19 @@ func (t *Tab) View() string {
 	// Build table
 	var content strings.Builder
 	content.WriteString(titleStyle.Render(resourceName))
-	content.WriteString("\n\n")
+	content.WriteString("\n")
+
+	// Show status message if present
+	if t.statusMessage != "" {
+		statusStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("86")).
+			Bold(true).
+			Padding(0, 0, 1, 0)
+		content.WriteString(statusStyle.Render(t.statusMessage))
+		content.WriteString("\n")
+	} else {
+		content.WriteString("\n")
+	}
 
 	switch t.currentResource {
 	case ResourceEnvironments:
