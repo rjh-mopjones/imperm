@@ -99,16 +99,27 @@ func (t *Tab) View() string {
 	content.WriteString(titleStyle.Render(resourceName))
 	content.WriteString("\n")
 
-	// Show status message if present
+	// Always reserve space for status message (so layout doesn't shift)
 	if t.statusMessage != "" {
+		var statusColor, bgColor string
+		if t.statusType == "error" {
+			statusColor = "196" // Red
+			bgColor = "52"      // Dark red background
+		} else {
+			statusColor = "46"  // Green
+			bgColor = "22"      // Dark green background
+		}
 		statusStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("86")).
+			Foreground(lipgloss.Color(statusColor)).
+			Background(lipgloss.Color(bgColor)).
 			Bold(true).
-			Padding(0, 0, 1, 0)
+			Padding(0, 1).
+			Margin(1, 0)
 		content.WriteString(statusStyle.Render(t.statusMessage))
 		content.WriteString("\n")
 	} else {
-		content.WriteString("\n")
+		// Reserve space with just a newline (no visible bar)
+		content.WriteString("\n\n\n")
 	}
 
 	switch t.currentResource {

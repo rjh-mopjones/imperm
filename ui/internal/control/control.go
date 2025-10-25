@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"imperm-ui/pkg/client"
 	"imperm-ui/pkg/models"
-	"imperm-ui/pkg/terraform"
+	"imperm-ui/pkg/tfvars"
 	"strings"
 	"time"
 
@@ -56,6 +56,11 @@ type Tab struct {
 	// Log panel focus and scrolling
 	logPanelFocused      bool
 	logScrollOffset      int
+
+	// Status message
+	statusMessage string
+	statusTime    time.Time
+	statusType    string // "success" or "error"
 }
 
 func NewTab(client client.Client) *Tab {
@@ -74,6 +79,9 @@ func NewTab(client client.Client) *Tab {
 		actions: []string{
 			"Build Environment",
 			"Build Environment with Options",
+			"Retain Environment",
+			"Get Environment",
+			"Delete Environment",
 		},
 		textInput:        ti,
 		inputMode:        false,
@@ -86,69 +94,59 @@ func NewTab(client client.Client) *Tab {
 
 // loadOptionsFromTerraform loads option categories from Terraform modules
 func loadOptionsFromTerraform() []optionCategory {
-	// Try to load from default location (local Terraform module)
-	loader, err := terraform.DefaultLoader()
-	if err != nil {
-		// If loading fails, fall back to hardcoded defaults
-		// This ensures the UI always has options available
-		// TODO: Add logging when available
+	// Try multiple paths for the Terraform variables file
+	paths := []string{
+		"../terraform/modules/k8s-namespace/variables.tf",
+		"terraform/modules/k8s-namespace/variables.tf",
+		"./terraform/modules/k8s-namespace/variables.tf",
+		"../../terraform/modules/k8s-namespace/variables.tf",
+	}
+
+	var variables []tfvars.Variable
+	var err error
+
+	for _, path := range paths {
+		variables, err = tfvars.ExtractFromFile(path)
+		if err == nil && len(variables) > 0 {
+			break
+		}
+	}
+
+	// If all paths fail, fall back to hardcoded options
+	if err != nil || len(variables) == 0 {
 		return getFallbackOptions()
 	}
 
-	tfCategories := loader.GetCategorizedOptions()
-	if len(tfCategories) == 0 {
-		// No categories found, use fallback
-		return getFallbackOptions()
-	}
+	// Group variables by category
+	categoryMap := tfvars.GroupByCategory(variables)
 
-	// Successfully loaded from Terraform!
-	categories := make([]optionCategory, 0, len(tfCategories))
+	// Convert to optionCategory format
+	categories := make([]optionCategory, 0, len(categoryMap))
+	for catName, vars := range categoryMap {
+		fields := make([]optionField, 0, len(vars))
 
-	for _, tfCat := range tfCategories {
-		fields := make([]optionField, 0, len(tfCat.Variables))
-
-		for _, tfVar := range tfCat.Variables {
+		for _, v := range vars {
 			// Extract just the description part after " - "
-			desc := tfVar.Description
+			desc := v.Description
 			parts := strings.SplitN(desc, " - ", 2)
 			if len(parts) == 2 {
 				desc = parts[1]
 			}
 
-			// Create placeholder from description and default
-			placeholder := desc
-			if tfVar.Default != "" && tfVar.Default != "0" {
-				placeholder = fmt.Sprintf("%s (default: %s)", desc, tfVar.Default)
-			}
-
-			// Convert snake_case to PascalCase for field name
-			fieldName := toPascalCase(tfVar.Name)
-
 			fields = append(fields, optionField{
-				name:        fieldName,
-				placeholder: placeholder,
+				name:        v.Name,
+				placeholder: desc,
 				value:       "",
 			})
 		}
 
 		categories = append(categories, optionCategory{
-			name:   tfCat.Name,
+			name:   catName,
 			fields: fields,
 		})
 	}
 
 	return categories
-}
-
-// toPascalCase converts snake_case to PascalCase
-func toPascalCase(s string) string {
-	parts := strings.Split(s, "_")
-	for i, part := range parts {
-		if len(part) > 0 {
-			parts[i] = strings.ToUpper(part[:1]) + part[1:]
-		}
-	}
-	return strings.Join(parts, "")
 }
 
 // getFallbackOptions returns hardcoded options if Terraform loading fails
@@ -157,27 +155,27 @@ func getFallbackOptions() []optionCategory {
 		{
 			name: "DeployOptions",
 			fields: []optionField{
-				{name: "Name", placeholder: "environment-name (leave empty for auto-generated)"},
-				{name: "Namespace", placeholder: "e.g., default, test-logging"},
-				{name: "ConstantLogger", placeholder: "replicas (e.g., 3) - logs every 2s"},
-				{name: "FastLogger", placeholder: "replicas (e.g., 2) - logs every 0.5s"},
-				{name: "ErrorLogger", placeholder: "replicas (e.g., 1) - mixed INFO/ERROR logs"},
-				{name: "JsonLogger", placeholder: "replicas (e.g., 2) - JSON formatted logs"},
+				{name: "name", placeholder: "environment-name (leave empty for auto-generated)"},
+				{name: "namespace", placeholder: "e.g., default, test-logging"},
+				{name: "constant_logger", placeholder: "replicas (e.g., 3) - logs every 2s"},
+				{name: "fast_logger", placeholder: "replicas (e.g., 2) - logs every 0.5s"},
+				{name: "error_logger", placeholder: "replicas (e.g., 1) - mixed INFO/ERROR logs"},
+				{name: "json_logger", placeholder: "replicas (e.g., 2) - JSON formatted logs"},
 			},
 		},
 		{
 			name: "DockerOptions",
 			fields: []optionField{
-				{name: "DockerRegistry", placeholder: "Container registry URL (default: docker.io)"},
-				{name: "DockerTag", placeholder: "Container image tag (default: latest)"},
-				{name: "DockerPullPolicy", placeholder: "Image pull policy (default: IfNotPresent)"},
+				{name: "docker_registry", placeholder: "Container registry URL (default: docker.io)"},
+				{name: "docker_tag", placeholder: "Container image tag (default: latest)"},
+				{name: "docker_pull_policy", placeholder: "Image pull policy (default: IfNotPresent)"},
 			},
 		},
 		{
 			name: "ServiceOptions",
 			fields: []optionField{
-				{name: "ServicePort", placeholder: "Service port number (default: 8080)"},
-				{name: "ServiceType", placeholder: "Kubernetes service type (default: ClusterIP)"},
+				{name: "service_port", placeholder: "Service port number (default: 8080)"},
+				{name: "service_type", placeholder: "Kubernetes service type (default: ClusterIP)"},
 			},
 		},
 	}
@@ -197,6 +195,30 @@ func (e errMsg) Error() string {
 }
 
 type tickMsg time.Time
+
+type clearStatusMsg struct{}
+
+type environmentCreatedMsg struct {
+	envName string
+	err     error
+}
+
+func (t *Tab) clearStatusAfterDelay() tea.Cmd {
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return clearStatusMsg{}
+	})
+}
+
+func (t *Tab) createEnvironment(envName string, options *models.DeploymentOptions) tea.Cmd {
+	return func() tea.Msg {
+		// Start the async operation
+		go func() {
+			_ = t.client.CreateEnvironment(envName, options)
+		}()
+		// Return success immediately to show the message
+		return environmentCreatedMsg{envName: envName, err: nil}
+	}
+}
 
 func (t *Tab) loadOperationLogs() tea.Msg {
 	if t.currentOperation == "" {
@@ -243,6 +265,20 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return t, tickCmd()
 
+	case clearStatusMsg:
+		// Clear the status message
+		t.statusMessage = ""
+		return t, nil
+
+	case environmentCreatedMsg:
+		// Only handle errors here since success is shown immediately
+		if msg.err != nil {
+			t.statusMessage = fmt.Sprintf("❌ Failed to create environment '%s': %v", msg.envName, msg.err)
+			t.statusType = "error"
+			t.statusTime = time.Now()
+			return t, t.clearStatusAfterDelay()
+		}
+
 	case tea.KeyMsg:
 		switch t.currentScreen {
 		case screenMainActions:
@@ -268,9 +304,14 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				t.currentOperation = envName
 				t.operationLogs = []string{}
 				t.operationStatus = "running"
-				// Create with nil options (no loggers)
-				go t.client.CreateEnvironment(envName, nil)
 				t.textInput.Reset()
+				t.inputMode = false
+				// Show success message immediately
+				t.statusMessage = fmt.Sprintf("✓ Started creating environment '%s'", envName)
+				t.statusType = "success"
+				t.statusTime = time.Now()
+				// Create with nil options (no loggers)
+				return t, tea.Batch(t.createEnvironment(envName, nil), t.clearStatusAfterDelay())
 			}
 			t.inputMode = false
 			return t, nil
@@ -320,6 +361,21 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case 1: // Build Environment with Options
 				t.currentScreen = screenOptionCategories
 				t.selectedCategory = 0
+			case 2: // Retain Environment
+				t.statusMessage = "⚠️  Unsupported operation: Retain Environment"
+				t.statusType = "error"
+				t.statusTime = time.Now()
+				return t, t.clearStatusAfterDelay()
+			case 3: // Get Environment
+				t.statusMessage = "⚠️  Unsupported operation: Get Environment"
+				t.statusType = "error"
+				t.statusTime = time.Now()
+				return t, t.clearStatusAfterDelay()
+			case 4: // Delete Environment
+				t.statusMessage = "⚠️  Unsupported operation: Delete Environment"
+				t.statusType = "error"
+				t.statusTime = time.Now()
+				return t, t.clearStatusAfterDelay()
 			}
 		}
 	}
@@ -353,9 +409,12 @@ func (t *Tab) updateOptionCategories(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.currentOperation = envName
 		t.operationLogs = []string{}
 		t.operationStatus = "running"
-		go t.client.CreateEnvironment(envName, options)
 		t.currentScreen = screenMainActions
-		return t, nil
+		// Show success message immediately
+		t.statusMessage = fmt.Sprintf("✓ Started creating environment '%s'", envName)
+		t.statusType = "success"
+		t.statusTime = time.Now()
+		return t, tea.Batch(t.createEnvironment(envName, options), t.clearStatusAfterDelay())
 	}
 
 	return t, nil
@@ -446,38 +505,16 @@ func (t *Tab) getEnvironmentName() string {
 
 func (t *Tab) getDeploymentOptions(envName string) *models.DeploymentOptions {
 	options := &models.DeploymentOptions{
-		Name: envName,
+		Name:      envName,
+		Variables: make(map[string]string),
 	}
 
-	// Parse DeployOptions category
+	// Collect all non-empty field values from all categories
 	for _, category := range t.optionCategories {
-		if category.name == "DeployOptions" {
-			for _, field := range category.fields {
-				if field.value == "" {
-					continue
-				}
-
-				switch field.name {
-				case "Namespace":
-					options.Namespace = field.value
-				case "ConstantLogger":
-					// Parse replica count
-					var replicas int
-					fmt.Sscanf(field.value, "%d", &replicas)
-					options.ConstantLogger = replicas
-				case "FastLogger":
-					var replicas int
-					fmt.Sscanf(field.value, "%d", &replicas)
-					options.FastLogger = replicas
-				case "ErrorLogger":
-					var replicas int
-					fmt.Sscanf(field.value, "%d", &replicas)
-					options.ErrorLogger = replicas
-				case "JsonLogger":
-					var replicas int
-					fmt.Sscanf(field.value, "%d", &replicas)
-					options.JsonLogger = replicas
-				}
+		for _, field := range category.fields {
+			if field.value != "" {
+				// Use the original variable name as the key
+				options.Variables[field.name] = field.value
 			}
 		}
 	}
@@ -531,7 +568,39 @@ func (t *Tab) viewMainActions() string {
 	// Left panel - Actions
 	var leftPanel strings.Builder
 	leftPanel.WriteString(titleStyle.Render("Actions"))
-	leftPanel.WriteString("\n\n")
+	leftPanel.WriteString("\n")
+
+	// Always reserve space for status message (so layout doesn't shift)
+	if t.statusMessage != "" {
+		var statusColor, bgColor string
+		if t.statusType == "error" {
+			// Check if it's a warning (unsupported operation)
+			if strings.Contains(t.statusMessage, "Unsupported operation") {
+				statusColor = "220" // Yellow/orange
+				bgColor = "130"     // Dark orange background
+			} else {
+				statusColor = "196" // Red
+				bgColor = "52"      // Dark red background
+			}
+		} else {
+			statusColor = "46"  // Green
+			bgColor = "22"      // Dark green background
+		}
+		statusStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(statusColor)).
+			Background(lipgloss.Color(bgColor)).
+			Bold(true).
+			Padding(0, 1).
+			Margin(1, 0).
+			Width(leftWidth - 8)
+		leftPanel.WriteString(statusStyle.Render(t.statusMessage))
+		leftPanel.WriteString("\n")
+	} else {
+		// Reserve space with just a newline (no visible bar)
+		leftPanel.WriteString("\n\n\n")
+	}
+
+	leftPanel.WriteString("\n")
 
 	for i, action := range t.actions {
 		style := actionStyle

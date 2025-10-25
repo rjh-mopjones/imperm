@@ -202,19 +202,7 @@ func (c *TerraformClient) GetEnvironmentHistory() ([]models.EnvironmentHistory, 
 
 // generateConfig generates Terraform configuration files for an environment
 func (c *TerraformClient) generateConfig(envDir, name string, options *models.DeploymentOptions) error {
-	// Default values
-	constantLogger := 0
-	fastLogger := 0
-	errorLogger := 0
-	jsonLogger := 0
-
-	if options != nil {
-		constantLogger = options.ConstantLogger
-		fastLogger = options.FastLogger
-		errorLogger = options.ErrorLogger
-		jsonLogger = options.JsonLogger
-	}
-
+	// Start with the base configuration
 	mainTf := fmt.Sprintf(`terraform {
   required_providers {
     kubernetes = {
@@ -231,17 +219,27 @@ provider "kubernetes" {
 module "environment" {
   source = "%s"
 
-  namespace_name    = "%s"
-  constant_logger   = %d
-  fast_logger       = %d
-  error_logger      = %d
-  json_logger       = %d
-}
+  namespace_name = "%s"
+`, c.kubeconfig, c.modulePath, name)
+
+	// Add all variables from options
+	if options != nil && len(options.Variables) > 0 {
+		for key, value := range options.Variables {
+			// Skip the name variable as it's already set as namespace_name
+			if key == "name" {
+				continue
+			}
+			mainTf += fmt.Sprintf("  %s = %s\n", key, value)
+		}
+	}
+
+	// Close the module block and add output
+	mainTf += `}
 
 output "namespace_name" {
   value = module.environment.namespace_name
 }
-`, c.kubeconfig, c.modulePath, name, constantLogger, fastLogger, errorLogger, jsonLogger)
+`
 
 	mainTfPath := filepath.Join(envDir, "main.tf")
 	if err := os.WriteFile(mainTfPath, []byte(mainTf), 0644); err != nil {

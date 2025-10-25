@@ -71,6 +71,7 @@ type Tab struct {
 	// Status message
 	statusMessage string
 	statusTime    time.Time
+	statusType    string // "success" or "error"
 
 	// Loading state
 	isLoading bool
@@ -112,6 +113,8 @@ type statsLoadedMsg struct {
 }
 
 type clearStatusMsg struct{}
+
+type resourceDeletedMsg struct{}
 
 func (t *Tab) loadResources() tea.Msg {
 	envs, err := t.client.ListEnvironments()
@@ -188,59 +191,41 @@ func (t *Tab) loadEvents() tea.Cmd {
 
 func (t *Tab) deleteSelectedResource() tea.Cmd {
 	return func() tea.Msg {
-		var deletedName string
-		var resourceType string
-
-		switch t.currentResource {
-		case ResourceEnvironments:
-			if t.selectedIndex < len(t.environments) {
-				env := t.environments[t.selectedIndex]
-				deletedName = env.Name
-				resourceType = "environment"
-				if err := t.client.DestroyEnvironment(env.Name); err != nil {
-					return errMsg{err}
+		// Perform deletion asynchronously
+		go func() {
+			switch t.currentResource {
+			case ResourceEnvironments:
+				if t.selectedIndex < len(t.environments) {
+					env := t.environments[t.selectedIndex]
+					_ = t.client.DestroyEnvironment(env.Name)
+				}
+			case ResourcePods:
+				var pods []models.Pod
+				if t.selectedEnvironment != nil {
+					pods = t.selectedEnvironment.Pods
+				} else {
+					pods = t.pods
+				}
+				if t.selectedIndex < len(pods) {
+					pod := pods[t.selectedIndex]
+					_ = t.client.DeletePod(pod.Namespace, pod.Name)
+				}
+			case ResourceDeployments:
+				var deployments []models.Deployment
+				if t.selectedEnvironment != nil {
+					deployments = t.selectedEnvironment.Deployments
+				} else {
+					deployments = t.deployments
+				}
+				if t.selectedIndex < len(deployments) {
+					dep := deployments[t.selectedIndex]
+					_ = t.client.DeleteDeployment(dep.Namespace, dep.Name)
 				}
 			}
-		case ResourcePods:
-			var pods []models.Pod
-			if t.selectedEnvironment != nil {
-				pods = t.selectedEnvironment.Pods
-			} else {
-				pods = t.pods
-			}
-			if t.selectedIndex < len(pods) {
-				pod := pods[t.selectedIndex]
-				deletedName = pod.Name
-				resourceType = "pod"
-				if err := t.client.DeletePod(pod.Namespace, pod.Name); err != nil {
-					return errMsg{err}
-				}
-			}
-		case ResourceDeployments:
-			var deployments []models.Deployment
-			if t.selectedEnvironment != nil {
-				deployments = t.selectedEnvironment.Deployments
-			} else {
-				deployments = t.deployments
-			}
-			if t.selectedIndex < len(deployments) {
-				dep := deployments[t.selectedIndex]
-				deletedName = dep.Name
-				resourceType = "deployment"
-				if err := t.client.DeleteDeployment(dep.Namespace, dep.Name); err != nil {
-					return errMsg{err}
-				}
-			}
-		}
+		}()
 
-		// Set status message
-		if deletedName != "" {
-			t.statusMessage = fmt.Sprintf("Deleted %s: %s", resourceType, deletedName)
-			t.statusTime = time.Now()
-		}
-
-		// Reload resources after deletion
-		return t.loadResources()
+		// Return message to trigger resource reload
+		return resourceDeletedMsg{}
 	}
 }
 
@@ -355,15 +340,22 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.currentStats = msg.stats
 
 	case errMsg:
-		// Store the error so we can display it
-		t.lastError = msg.err
+		// Display error as a status message
+		t.statusMessage = fmt.Sprintf("❌ Error: %v", msg.err)
+		t.statusType = "error"
+		t.statusTime = time.Now()
+		t.lastError = nil // Don't show full-screen error
 		t.isLoading = false // Stop loading on error
-		return t, nil
+		return t, t.clearStatusAfterDelay()
 
 	case clearStatusMsg:
 		// Clear the status message
 		t.statusMessage = ""
 		return t, nil
+
+	case resourceDeletedMsg:
+		// Success message already shown immediately, just reload resources
+		return t, t.loadResources
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -467,6 +459,45 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "x":
 			// Delete selected resource
 			if t.panelFocus == FocusTable {
+				// Get the resource info to show message immediately
+				var resourceName, resourceType string
+				switch t.currentResource {
+				case ResourceEnvironments:
+					if t.selectedIndex < len(t.environments) {
+						resourceName = t.environments[t.selectedIndex].Name
+						resourceType = "environment"
+					}
+				case ResourcePods:
+					var pods []models.Pod
+					if t.selectedEnvironment != nil {
+						pods = t.selectedEnvironment.Pods
+					} else {
+						pods = t.pods
+					}
+					if t.selectedIndex < len(pods) {
+						resourceName = pods[t.selectedIndex].Name
+						resourceType = "pod"
+					}
+				case ResourceDeployments:
+					var deployments []models.Deployment
+					if t.selectedEnvironment != nil {
+						deployments = t.selectedEnvironment.Deployments
+					} else {
+						deployments = t.deployments
+					}
+					if t.selectedIndex < len(deployments) {
+						resourceName = deployments[t.selectedIndex].Name
+						resourceType = "deployment"
+					}
+				}
+
+				// Show success message immediately
+				if resourceName != "" {
+					t.statusMessage = fmt.Sprintf("✓ Deleted %s: %s", resourceType, resourceName)
+					t.statusType = "success"
+					t.statusTime = time.Now()
+				}
+
 				return t, tea.Batch(t.deleteSelectedResource(), t.clearStatusAfterDelay())
 			}
 		case "1":

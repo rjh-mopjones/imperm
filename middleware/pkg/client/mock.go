@@ -118,7 +118,7 @@ func (m *MockClient) CreateEnvironment(name string, options *models.DeploymentOp
 	m.environments = append(m.environments, newEnv)
 
 	// Add to history
-	hasOptions := options != nil && (options.ConstantLogger > 0 || options.FastLogger > 0 || options.ErrorLogger > 0 || options.JsonLogger > 0)
+	hasOptions := options != nil && len(options.Variables) > 0
 	historyEntry := models.EnvironmentHistory{
 		Name:        name,
 		LaunchedAt:  now,

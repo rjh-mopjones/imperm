@@ -75,7 +75,7 @@ func (c *K8sClient) CreateEnvironment(name string, options *models.DeploymentOpt
 	}
 
 	// If options provided, create resources
-	if options != nil && options.HasLoggers() {
+	if options != nil && options.HasVariables() {
 		if err := c.createSampleDeployment(name); err != nil {
 			// Namespace was created, so don't fail completely
 			// Just log the error (in production, you'd want proper logging)
