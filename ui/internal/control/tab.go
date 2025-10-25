@@ -43,41 +43,7 @@ func (t *Tab) Init() tea.Cmd {
 	return tickCmd()
 }
 
-func (t *Tab) clearStatusAfterDelay() tea.Cmd {
-	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-		return clearStatusMsg{}
-	})
-}
-
-func (t *Tab) createEnvironment(envName string, options *models.DeploymentOptions) tea.Cmd {
-	return func() tea.Msg {
-		// Start the async operation
-		go func() {
-			_ = t.client.CreateEnvironment(envName, options)
-		}()
-		// Return success immediately to show the message
-		return environmentCreatedMsg{envName: envName, err: nil}
-	}
-}
-
-func (t *Tab) loadOperationLogs() tea.Msg {
-	if t.currentOperation == "" {
-		return nil
-	}
-
-	logs, err := t.client.GetOperationLogs(t.currentOperation)
-	if err != nil {
-		return nil // Silently fail - logs might not be available yet
-	}
-
-	return operationLogsMsg{logs: logs, envName: t.currentOperation}
-}
-
-func tickCmd() tea.Cmd {
-	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
-}
+// Helper methods for form management
 
 func (t *Tab) initializeFieldInputs() {
 	category := t.optionCategories[t.currentCategoryIndex]
