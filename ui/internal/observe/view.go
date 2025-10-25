@@ -72,19 +72,15 @@ func (t *Tab) View() string {
 
 	// Always reserve space for status message (so layout doesn't shift)
 	if t.statusMessage != "" {
-		var statusColor, bgColor string
+		var statusColor string
 		if t.statusType == "error" {
 			statusColor = "196" // Red
-			bgColor = "52"      // Dark red background
 		} else {
-			statusColor = "46"  // Green
-			bgColor = "22"      // Dark green background
+			statusColor = "46" // Green
 		}
 		statusStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(statusColor)).
-			Background(lipgloss.Color(bgColor)).
 			Bold(true).
-			Padding(0, 1).
 			Margin(1, 0)
 		content.WriteString(statusStyle.Render(t.statusMessage))
 		content.WriteString("\n")

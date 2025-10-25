@@ -572,27 +572,21 @@ func (t *Tab) viewMainActions() string {
 
 	// Always reserve space for status message (so layout doesn't shift)
 	if t.statusMessage != "" {
-		var statusColor, bgColor string
+		var statusColor string
 		if t.statusType == "error" {
 			// Check if it's a warning (unsupported operation)
 			if strings.Contains(t.statusMessage, "Unsupported operation") {
 				statusColor = "220" // Yellow/orange
-				bgColor = "130"     // Dark orange background
 			} else {
 				statusColor = "196" // Red
-				bgColor = "52"      // Dark red background
 			}
 		} else {
-			statusColor = "46"  // Green
-			bgColor = "22"      // Dark green background
+			statusColor = "46" // Green
 		}
 		statusStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(statusColor)).
-			Background(lipgloss.Color(bgColor)).
 			Bold(true).
-			Padding(0, 1).
-			Margin(1, 0).
-			Width(leftWidth - 8)
+			Margin(1, 0)
 		leftPanel.WriteString(statusStyle.Render(t.statusMessage))
 		leftPanel.WriteString("\n")
 	} else {
