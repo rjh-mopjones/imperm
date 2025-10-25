@@ -75,8 +75,6 @@ type Tab struct {
 }
 
 // Messages
-type tickMsg time.Time
-
 type resourcesLoadedMsg struct {
 	environments []models.Environment
 	pods         []models.Pod
@@ -96,14 +94,4 @@ type statsLoadedMsg struct {
 	stats *models.ResourceStats
 }
 
-type clearStatusMsg struct{}
-
 type resourceDeletedMsg struct{}
-
-type errMsg struct {
-	err error
-}
-
-func (e errMsg) Error() string {
-	return e.err.Error()
-}

@@ -1,16 +1,28 @@
 package control
 
 import (
-	"imperm-ui/pkg/models"
+	"fmt"
 	"time"
+
+	"imperm-ui/internal/config"
+	"imperm-ui/internal/messages"
+	"imperm-ui/pkg/models"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// setStatus sets a status message and returns a command to clear it after a delay
+func (t *Tab) setStatus(msgType, format string, args ...interface{}) tea.Cmd {
+	t.statusMessage = fmt.Sprintf(format, args...)
+	t.statusType = msgType
+	t.statusTime = time.Now()
+	return t.clearStatusAfterDelay()
+}
+
 // clearStatusAfterDelay clears the status message after 3 seconds
 func (t *Tab) clearStatusAfterDelay() tea.Cmd {
-	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-		return clearStatusMsg{}
+	return tea.Tick(config.StatusMessageTimeout, func(t time.Time) tea.Msg {
+		return messages.ClearStatusMsg{}
 	})
 }
 
@@ -40,9 +52,9 @@ func (t *Tab) loadOperationLogs() tea.Msg {
 	return operationLogsMsg{logs: logs, envName: t.currentOperation}
 }
 
-// tickCmd returns a command that ticks every 500ms for polling logs
+// tickCmd returns a command that ticks for polling logs
 func tickCmd() tea.Cmd {
-	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
-		return tickMsg(t)
+	return tea.Tick(config.LogPollingInterval, func(t time.Time) tea.Msg {
+		return messages.TickMsg(t)
 	})
 }

@@ -9,66 +9,116 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func (t *Tab) renderEnvironmentsTable(headerStyle, rowStyle, selectedStyle lipgloss.Style) string {
+// TableColumn defines a column in a generic table
+type TableColumn struct {
+	Header string
+	Width  int
+	Value  func(item interface{}) string
+}
+
+// renderGenericTable renders a table with the given columns and items
+func renderGenericTable(
+	items []interface{},
+	columns []TableColumn,
+	selectedIndex int,
+	isLoading bool,
+	emptyResourceName string,
+	headerStyle, rowStyle, selectedStyle lipgloss.Style,
+) string {
 	var table strings.Builder
 
-	// Header
-	nameCol := headerStyle.Width(30).Render("NAME")
-	namespaceCol := headerStyle.Width(20).Render("NAMESPACE")
-	statusCol := headerStyle.Width(15).Render("STATUS")
-	ageCol := headerStyle.Width(15).Render("AGE")
-	podsCol := headerStyle.Width(10).Render("PODS")
-
-	table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, nameCol, namespaceCol, statusCol, ageCol, podsCol))
+	// Render header
+	var headerCols []string
+	for _, col := range columns {
+		headerCols = append(headerCols, headerStyle.Width(col.Width).Render(col.Header))
+	}
+	table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, headerCols...))
 	table.WriteString("\n")
 
-	// Rows
-	for i, env := range t.environments {
+	// Render rows
+	for i, item := range items {
 		style := rowStyle
-		if i == t.selectedIndex {
+		if i == selectedIndex {
 			style = selectedStyle
 		}
 
-		age := formatAge(env.Age)
-		podCount := fmt.Sprintf("%d", len(env.Pods))
+		var rowCols []string
+		for _, col := range columns {
+			value := col.Value(item)
+			rowCols = append(rowCols, style.Width(col.Width).Render(value))
+		}
 
-		nameCol := style.Width(30).Render(truncate(env.Name, 28))
-		namespaceCol := style.Width(20).Render(truncate(env.Namespace, 18))
-		statusCol := style.Width(15).Render(env.Status)
-		ageCol := style.Width(15).Render(age)
-		podsCol := style.Width(10).Render(podCount)
-
-		table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, nameCol, namespaceCol, statusCol, ageCol, podsCol))
+		table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, rowCols...))
 		table.WriteString("\n")
 	}
 
-	if len(t.environments) == 0 {
-		if t.isLoading {
-			table.WriteString(rowStyle.Render("Loading environments..."))
+	// Empty state
+	if len(items) == 0 {
+		if isLoading {
+			table.WriteString(rowStyle.Render(fmt.Sprintf("Loading %s...", emptyResourceName)))
 		} else {
-			table.WriteString(rowStyle.Render("No environments found"))
+			table.WriteString(rowStyle.Render(fmt.Sprintf("No %s found", emptyResourceName)))
 		}
 	}
 
 	return table.String()
 }
 
+func (t *Tab) renderEnvironmentsTable(headerStyle, rowStyle, selectedStyle lipgloss.Style) string {
+	// Convert environments to []interface{}
+	items := make([]interface{}, len(t.environments))
+	for i, env := range t.environments {
+		items[i] = env
+	}
+
+	// Define columns
+	columns := []TableColumn{
+		{
+			Header: "NAME",
+			Width:  30,
+			Value: func(item interface{}) string {
+				env := item.(models.Environment)
+				return truncate(env.Name, 28)
+			},
+		},
+		{
+			Header: "NAMESPACE",
+			Width:  20,
+			Value: func(item interface{}) string {
+				env := item.(models.Environment)
+				return truncate(env.Namespace, 18)
+			},
+		},
+		{
+			Header: "STATUS",
+			Width:  15,
+			Value: func(item interface{}) string {
+				env := item.(models.Environment)
+				return env.Status
+			},
+		},
+		{
+			Header: "AGE",
+			Width:  15,
+			Value: func(item interface{}) string {
+				env := item.(models.Environment)
+				return formatAge(env.Age)
+			},
+		},
+		{
+			Header: "PODS",
+			Width:  10,
+			Value: func(item interface{}) string {
+				env := item.(models.Environment)
+				return fmt.Sprintf("%d", len(env.Pods))
+			},
+		},
+	}
+
+	return renderGenericTable(items, columns, t.selectedIndex, t.isLoading, "environments", headerStyle, rowStyle, selectedStyle)
+}
+
 func (t *Tab) renderPodsTable(headerStyle, rowStyle, selectedStyle lipgloss.Style) string {
-	var table strings.Builder
-
-	// Header
-	nameCol := headerStyle.Width(30).Render("NAME")
-	namespaceCol := headerStyle.Width(15).Render("NAMESPACE")
-	readyCol := headerStyle.Width(8).Render("READY")
-	statusCol := headerStyle.Width(12).Render("STATUS")
-	restartsCol := headerStyle.Width(10).Render("RESTARTS")
-	cpuCol := headerStyle.Width(10).Render("CPU")
-	memoryCol := headerStyle.Width(10).Render("MEMORY")
-	ageCol := headerStyle.Width(10).Render("AGE")
-
-	table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, nameCol, namespaceCol, readyCol, statusCol, restartsCol, cpuCol, memoryCol, ageCol))
-	table.WriteString("\n")
-
 	// Determine which pods to display
 	var pods []models.Pod
 	if t.selectedEnvironment != nil {
@@ -77,53 +127,52 @@ func (t *Tab) renderPodsTable(headerStyle, rowStyle, selectedStyle lipgloss.Styl
 		pods = t.pods
 	}
 
-	// Rows
+	// Convert pods to []interface{}
+	items := make([]interface{}, len(pods))
 	for i, pod := range pods {
-		style := rowStyle
-		if i == t.selectedIndex {
-			style = selectedStyle
-		}
-
-		age := formatAge(pod.Age)
-
-		nameCol := style.Width(30).Render(truncate(pod.Name, 28))
-		namespaceCol := style.Width(15).Render(truncate(pod.Namespace, 13))
-		readyCol := style.Width(8).Render(pod.Ready)
-		statusCol := style.Width(12).Render(pod.Status)
-		restartsCol := style.Width(10).Render(fmt.Sprintf("%d", pod.Restarts))
-		cpuCol := style.Width(10).Render(pod.CPU)
-		memoryCol := style.Width(10).Render(pod.Memory)
-		ageCol := style.Width(10).Render(age)
-
-		table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, nameCol, namespaceCol, readyCol, statusCol, restartsCol, cpuCol, memoryCol, ageCol))
-		table.WriteString("\n")
+		items[i] = pod
 	}
 
-	if len(pods) == 0 {
-		if t.isLoading {
-			table.WriteString(rowStyle.Render("Loading pods..."))
-		} else {
-			table.WriteString(rowStyle.Render("No pods found"))
-		}
+	// Define columns
+	columns := []TableColumn{
+		{Header: "NAME", Width: 30, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return truncate(pod.Name, 28)
+		}},
+		{Header: "NAMESPACE", Width: 15, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return truncate(pod.Namespace, 13)
+		}},
+		{Header: "READY", Width: 8, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return pod.Ready
+		}},
+		{Header: "STATUS", Width: 12, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return pod.Status
+		}},
+		{Header: "RESTARTS", Width: 10, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return fmt.Sprintf("%d", pod.Restarts)
+		}},
+		{Header: "CPU", Width: 10, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return pod.CPU
+		}},
+		{Header: "MEMORY", Width: 10, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return pod.Memory
+		}},
+		{Header: "AGE", Width: 10, Value: func(item interface{}) string {
+			pod := item.(models.Pod)
+			return formatAge(pod.Age)
+		}},
 	}
 
-	return table.String()
+	return renderGenericTable(items, columns, t.selectedIndex, t.isLoading, "pods", headerStyle, rowStyle, selectedStyle)
 }
 
 func (t *Tab) renderDeploymentsTable(headerStyle, rowStyle, selectedStyle lipgloss.Style) string {
-	var table strings.Builder
-
-	// Header
-	nameCol := headerStyle.Width(35).Render("NAME")
-	namespaceCol := headerStyle.Width(20).Render("NAMESPACE")
-	readyCol := headerStyle.Width(10).Render("READY")
-	upToDateCol := headerStyle.Width(12).Render("UP-TO-DATE")
-	availableCol := headerStyle.Width(12).Render("AVAILABLE")
-	ageCol := headerStyle.Width(15).Render("AGE")
-
-	table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, nameCol, namespaceCol, readyCol, upToDateCol, availableCol, ageCol))
-	table.WriteString("\n")
-
 	// Determine which deployments to display
 	var deployments []models.Deployment
 	if t.selectedEnvironment != nil {
@@ -132,35 +181,41 @@ func (t *Tab) renderDeploymentsTable(headerStyle, rowStyle, selectedStyle lipglo
 		deployments = t.deployments
 	}
 
-	// Rows
+	// Convert deployments to []interface{}
+	items := make([]interface{}, len(deployments))
 	for i, deployment := range deployments {
-		style := rowStyle
-		if i == t.selectedIndex {
-			style = selectedStyle
-		}
-
-		age := formatAge(deployment.Age)
-
-		nameCol := style.Width(35).Render(truncate(deployment.Name, 33))
-		namespaceCol := style.Width(20).Render(truncate(deployment.Namespace, 18))
-		readyCol := style.Width(10).Render(deployment.Ready)
-		upToDateCol := style.Width(12).Render(fmt.Sprintf("%d", deployment.UpToDate))
-		availableCol := style.Width(12).Render(fmt.Sprintf("%d", deployment.Available))
-		ageCol := style.Width(15).Render(age)
-
-		table.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, nameCol, namespaceCol, readyCol, upToDateCol, availableCol, ageCol))
-		table.WriteString("\n")
+		items[i] = deployment
 	}
 
-	if len(deployments) == 0 {
-		if t.isLoading {
-			table.WriteString(rowStyle.Render("Loading deployments..."))
-		} else {
-			table.WriteString(rowStyle.Render("No deployments found"))
-		}
+	// Define columns
+	columns := []TableColumn{
+		{Header: "NAME", Width: 35, Value: func(item interface{}) string {
+			deployment := item.(models.Deployment)
+			return truncate(deployment.Name, 33)
+		}},
+		{Header: "NAMESPACE", Width: 20, Value: func(item interface{}) string {
+			deployment := item.(models.Deployment)
+			return truncate(deployment.Namespace, 18)
+		}},
+		{Header: "READY", Width: 10, Value: func(item interface{}) string {
+			deployment := item.(models.Deployment)
+			return deployment.Ready
+		}},
+		{Header: "UP-TO-DATE", Width: 12, Value: func(item interface{}) string {
+			deployment := item.(models.Deployment)
+			return fmt.Sprintf("%d", deployment.UpToDate)
+		}},
+		{Header: "AVAILABLE", Width: 12, Value: func(item interface{}) string {
+			deployment := item.(models.Deployment)
+			return fmt.Sprintf("%d", deployment.Available)
+		}},
+		{Header: "AGE", Width: 15, Value: func(item interface{}) string {
+			deployment := item.(models.Deployment)
+			return formatAge(deployment.Age)
+		}},
 	}
 
-	return table.String()
+	return renderGenericTable(items, columns, t.selectedIndex, t.isLoading, "deployments", headerStyle, rowStyle, selectedStyle)
 }
 
 func formatAge(t time.Time) string {

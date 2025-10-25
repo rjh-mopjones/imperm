@@ -64,18 +64,6 @@ type operationLogsMsg struct {
 	envName string
 }
 
-type errMsg struct {
-	err error
-}
-
-func (e errMsg) Error() string {
-	return e.err.Error()
-}
-
-type tickMsg time.Time
-
-type clearStatusMsg struct{}
-
 type environmentCreatedMsg struct {
 	envName string
 	err     error

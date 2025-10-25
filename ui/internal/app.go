@@ -1,9 +1,10 @@
 package ui
 
 import (
-	"imperm-ui/pkg/client"
 	"imperm-ui/internal/control"
 	"imperm-ui/internal/observe"
+	sharedui "imperm-ui/internal/ui"
+	"imperm-ui/pkg/client"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,14 +16,6 @@ const (
 	tabControl tabType = iota
 	tabObserve
 )
-
-type errMsg struct {
-	err error
-}
-
-func (e errMsg) Error() string {
-	return e.err.Error()
-}
 
 type Model struct {
 	client      client.Client
@@ -103,13 +96,13 @@ func (m *Model) View() string {
 
 	// Tab bar
 	tabBarStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("230")).
-		Background(lipgloss.Color("235")).
+		Foreground(sharedui.ColorTextPale).
+		Background(sharedui.ColorBorderDark).
 		Padding(0, 2)
 
 	activeTabStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("0")).
-		Background(lipgloss.Color("86")).
+		Background(sharedui.ColorPrimary).
 		Bold(true).
 		Padding(0, 2)
 
@@ -132,8 +125,8 @@ func (m *Model) View() string {
 	var tabBarContent string
 	if m.currentTab == tabObserve && m.observeTab != nil {
 		infoStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Background(lipgloss.Color("235")).
+			Foreground(sharedui.ColorTextDimmer).
+			Background(sharedui.ColorBorderDark).
 			Padding(0, 2).
 			MarginLeft(4)
 
@@ -163,7 +156,7 @@ func (m *Model) View() string {
 
 	// Footer
 	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
+		Foreground(sharedui.ColorTextDimmer).
 		Padding(0, 1)
 
 	footer := footerStyle.Render("[Tab] Switch  [q] Quit")

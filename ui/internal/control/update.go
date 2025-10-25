@@ -1,8 +1,7 @@
 package control
 
 import (
-	"fmt"
-	"time"
+	"imperm-ui/internal/messages"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -22,14 +21,14 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Logs are now persistent and won't be cleared automatically
 		}
 
-	case tickMsg:
+	case messages.TickMsg:
 		// Poll for logs if we have a current operation
 		if t.currentOperation != "" {
 			return t, tea.Batch(tickCmd(), t.loadOperationLogs)
 		}
 		return t, tickCmd()
 
-	case clearStatusMsg:
+	case messages.ClearStatusMsg:
 		// Clear the status message
 		t.statusMessage = ""
 		return t, nil
@@ -37,10 +36,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case environmentCreatedMsg:
 		// Only handle errors here since success is shown immediately
 		if msg.err != nil {
-			t.statusMessage = fmt.Sprintf("❌ Failed to create environment '%s': %v", msg.envName, msg.err)
-			t.statusType = "error"
-			t.statusTime = time.Now()
-			return t, t.clearStatusAfterDelay()
+			return t, t.setStatus("error", "❌ Failed to create environment '%s': %v", msg.envName, msg.err)
 		}
 
 	case tea.KeyMsg:
@@ -70,12 +66,8 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				t.operationStatus = "running"
 				t.textInput.Reset()
 				t.inputMode = false
-				// Show success message immediately
-				t.statusMessage = fmt.Sprintf("✓ Started creating environment '%s'", envName)
-				t.statusType = "success"
-				t.statusTime = time.Now()
 				// Create with nil options (no loggers)
-				return t, tea.Batch(t.createEnvironment(envName, nil), t.clearStatusAfterDelay())
+				return t, tea.Batch(t.createEnvironment(envName, nil), t.setStatus("success", "✓ Started creating environment '%s'", envName))
 			}
 			t.inputMode = false
 			return t, nil
@@ -126,20 +118,11 @@ func (t *Tab) updateMainActions(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				t.currentScreen = screenOptionCategories
 				t.selectedCategory = 0
 			case 2: // Retain Environment
-				t.statusMessage = "⚠️  Unsupported operation: Retain Environment"
-				t.statusType = "error"
-				t.statusTime = time.Now()
-				return t, t.clearStatusAfterDelay()
+				return t, t.setStatus("error", "⚠️  Unsupported operation: Retain Environment")
 			case 3: // Get Environment
-				t.statusMessage = "⚠️  Unsupported operation: Get Environment"
-				t.statusType = "error"
-				t.statusTime = time.Now()
-				return t, t.clearStatusAfterDelay()
+				return t, t.setStatus("error", "⚠️  Unsupported operation: Get Environment")
 			case 4: // Delete Environment
-				t.statusMessage = "⚠️  Unsupported operation: Delete Environment"
-				t.statusType = "error"
-				t.statusTime = time.Now()
-				return t, t.clearStatusAfterDelay()
+				return t, t.setStatus("error", "⚠️  Unsupported operation: Delete Environment")
 			}
 		}
 	}
@@ -174,11 +157,7 @@ func (t *Tab) updateOptionCategories(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.operationLogs = []string{}
 		t.operationStatus = "running"
 		t.currentScreen = screenMainActions
-		// Show success message immediately
-		t.statusMessage = fmt.Sprintf("✓ Started creating environment '%s'", envName)
-		t.statusType = "success"
-		t.statusTime = time.Now()
-		return t, tea.Batch(t.createEnvironment(envName, options), t.clearStatusAfterDelay())
+		return t, tea.Batch(t.createEnvironment(envName, options), t.setStatus("success", "✓ Started creating environment '%s'", envName))
 	}
 
 	return t, nil

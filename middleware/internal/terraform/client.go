@@ -225,8 +225,8 @@ module "environment" {
 	// Add all variables from options
 	if options != nil && len(options.Variables) > 0 {
 		for key, value := range options.Variables {
-			// Skip the name variable as it's already set as namespace_name
-			if key == "name" {
+			// Skip the name and namespace_name variables as namespace_name is already set above
+			if key == "name" || key == "namespace_name" {
 				continue
 			}
 			mainTf += fmt.Sprintf("  %s = %s\n", key, value)

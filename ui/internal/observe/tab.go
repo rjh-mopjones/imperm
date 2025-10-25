@@ -1,9 +1,8 @@
 package observe
 
 import (
-	"time"
-
 	tea "github.com/charmbracelet/bubbletea"
+	"imperm-ui/internal/config"
 	"imperm-ui/pkg/client"
 	"imperm-ui/pkg/models"
 )
@@ -17,8 +16,9 @@ func NewTab(client client.Client) *Tab {
 		deployments:     []models.Deployment{},
 		selectedIndex:   0,
 		autoRefresh:     true,
-		refreshInterval: 5 * time.Second,
+		refreshInterval: config.ResourceRefreshInterval,
 		isLoading:       true, // Start in loading state
+		rightPanelView:  RightPanelLogs, // Default to Logs view for auto-updating
 	}
 }
 
@@ -65,6 +65,22 @@ func (t *Tab) getSelectedResource() interface{} {
 		return t.deployments[t.selectedIndex]
 	}
 	return nil
+}
+
+// getCurrentPods returns the currently visible pods (either from selected environment or all pods)
+func (t *Tab) getCurrentPods() []models.Pod {
+	if t.selectedEnvironment != nil {
+		return t.selectedEnvironment.Pods
+	}
+	return t.pods
+}
+
+// getCurrentDeployments returns the currently visible deployments (either from selected environment or all deployments)
+func (t *Tab) getCurrentDeployments() []models.Deployment {
+	if t.selectedEnvironment != nil {
+		return t.selectedEnvironment.Deployments
+	}
+	return t.deployments
 }
 
 func (t *Tab) GetHeaderInfo() string {

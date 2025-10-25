@@ -1,26 +1,29 @@
 package observe
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"imperm-ui/internal/config"
+	"imperm-ui/internal/messages"
 	"imperm-ui/pkg/models"
 )
 
 func (t *Tab) loadResources() tea.Msg {
 	envs, err := t.client.ListEnvironments()
 	if err != nil {
-		return errMsg{err}
+		return messages.ErrMsg{Err: err}
 	}
 
 	pods, err := t.client.ListPods(t.filterNamespace)
 	if err != nil {
-		return errMsg{err}
+		return messages.ErrMsg{Err: err}
 	}
 
 	deployments, err := t.client.ListDeployments(t.filterNamespace)
 	if err != nil {
-		return errMsg{err}
+		return messages.ErrMsg{Err: err}
 	}
 
 	return resourcesLoadedMsg{
@@ -44,7 +47,7 @@ func (t *Tab) loadLogs() tea.Cmd {
 
 		logs, err := t.client.GetPodLogs(pod.Namespace, pod.Name)
 		if err != nil {
-			return errMsg{err}
+			return messages.ErrMsg{Err: err}
 		}
 
 		return logsLoadedMsg{logs: logs, podName: pod.Name}
@@ -73,7 +76,7 @@ func (t *Tab) loadEvents() tea.Cmd {
 		}
 
 		if err != nil {
-			return errMsg{err}
+			return messages.ErrMsg{Err: err}
 		}
 
 		return eventsLoadedMsg{events: events}
@@ -94,7 +97,7 @@ func (t *Tab) loadStats() tea.Cmd {
 
 		stats, err := t.client.GetResourceStats(resourceType, t.filterNamespace)
 		if err != nil {
-			return errMsg{err}
+			return messages.ErrMsg{Err: err}
 		}
 
 		return statsLoadedMsg{stats: stats}
@@ -141,15 +144,23 @@ func (t *Tab) deleteSelectedResource() tea.Cmd {
 	}
 }
 
+// setStatus sets a status message and returns a command to clear it after a delay
+func (t *Tab) setStatus(msgType, format string, args ...interface{}) tea.Cmd {
+	t.statusMessage = fmt.Sprintf(format, args...)
+	t.statusType = msgType
+	t.statusTime = time.Now()
+	return t.clearStatusAfterDelay()
+}
+
 func (t *Tab) clearStatusAfterDelay() tea.Cmd {
-	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-		return clearStatusMsg{}
+	return tea.Tick(config.StatusMessageTimeout, func(t time.Time) tea.Msg {
+		return messages.ClearStatusMsg{}
 	})
 }
 
 func (t *Tab) tick() tea.Cmd {
 	return tea.Tick(t.refreshInterval, func(tm time.Time) tea.Msg {
-		return tickMsg(tm)
+		return messages.TickMsg(tm)
 	})
 }
 

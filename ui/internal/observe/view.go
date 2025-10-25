@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"imperm-ui/internal/ui"
 )
 
 func (t *Tab) View() string {
@@ -14,20 +15,13 @@ func (t *Tab) View() string {
 
 	// Show error if present
 	if t.lastError != nil {
-		errorStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true).
-			Padding(1, 2)
-		return errorStyle.Render(fmt.Sprintf("Error: %v\n\nPress 'r' to retry", t.lastError))
+		return ui.ErrorStyle.Render(fmt.Sprintf("Error: %v\n\nPress 'r' to retry", t.lastError))
 	}
 
-	// Styles
-	cyanColor := lipgloss.Color("51")
-
 	// Title color changes based on focus
-	titleColor := lipgloss.Color("245") // Grey when not focused
+	titleColor := ui.ColorTextDim
 	if t.panelFocus == FocusTable {
-		titleColor = cyanColor // Cyan when focused
+		titleColor = ui.ColorHighlight
 	}
 
 	titleStyle := lipgloss.NewStyle().
@@ -35,24 +29,11 @@ func (t *Tab) View() string {
 		Foreground(titleColor).
 		Padding(0, 0, 1, 0)
 
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("230")).
-		Background(lipgloss.Color("238")).
-		Padding(0, 1)
+	tableHeaderStyle := ui.TableHeaderStyle
 
-	rowStyle := lipgloss.NewStyle().
-		Padding(0, 1)
+	rowStyle := ui.TableRowStyle
 
-	// Cyan highlight for selected row
-	selectedRowStyle := rowStyle.Copy().
-		Background(lipgloss.Color("237")).
-		Foreground(lipgloss.Color("51")).
-		Bold(true)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("241")).
-		Padding(1, 0)
+	selectedRowStyle := ui.TableRowSelectedStyle
 
 	// Get resource name for table title
 	var resourceName string
@@ -71,23 +52,7 @@ func (t *Tab) View() string {
 	content.WriteString("\n")
 
 	// Always reserve space for status message (so layout doesn't shift)
-	if t.statusMessage != "" {
-		var statusColor string
-		if t.statusType == "error" {
-			statusColor = "196" // Red
-		} else {
-			statusColor = "46" // Green
-		}
-		statusStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(statusColor)).
-			Bold(true).
-			Margin(1, 0)
-		content.WriteString(statusStyle.Render(t.statusMessage))
-		content.WriteString("\n")
-	} else {
-		// Reserve space with just a newline (no visible bar)
-		content.WriteString("\n\n\n")
-	}
+	content.WriteString(ui.RenderStatusMessage(t.statusMessage, t.statusType))
 
 	switch t.currentResource {
 	case ResourceEnvironments:
@@ -99,39 +64,33 @@ func (t *Tab) View() string {
 	}
 
 	// Right panel
+	layout := ui.CalculateSplitLayout(t.width, t.height)
 	rightPanelHeight := t.height - 10
 	rightPanelContent := t.renderRightPanel(rightPanelHeight)
 
-	// Calculate widths for two-panel layout (50/50 split)
-	tableWidth := t.width / 2         // 50% for table
-	rightWidth := t.width - tableWidth // 50% for right panel
-
-	// Reuse cyan color for highlights
-	dimColor := lipgloss.Color("240")  // Dim gray
-
-	// Style for focused/unfocused panels
-	rightBorderColor := dimColor
+	// Style for focused/unfocused panels - customize border color
+	rightBorderColor := ui.ColorBorder
 	if t.panelFocus == FocusRightPanel {
-		rightBorderColor = cyanColor
+		rightBorderColor = ui.ColorHighlight
 	}
 
-	// Table panel (no border)
-	tablePanel := lipgloss.NewStyle().
-		Width(tableWidth - 2).
-		Height(t.height - 8).
-		Padding(1).
-		Render(content.String())
-
-	// Right panel with full box border
-	rightPanel := lipgloss.NewStyle().
-		Width(rightWidth - 4).
+	// Create right panel with custom border
+	rightPanelStyled := lipgloss.NewStyle().
+		Width(layout.RightWidth - 4).
 		Height(t.height - 10).
 		Padding(1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(rightBorderColor).
 		Render(rightPanelContent)
 
-	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, tablePanel, rightPanel)
+	// Create table panel
+	tablePanel := lipgloss.NewStyle().
+		Width(layout.LeftWidth - 2).
+		Height(layout.PanelHeight).
+		Padding(1).
+		Render(content.String())
+
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, tablePanel, rightPanelStyled)
 
 	// Help text
 	var helpText string
@@ -140,7 +99,7 @@ func (t *Tab) View() string {
 	} else {
 		helpText = "[←/h] Back  [→←/hl] Cycle Views  [↑↓/jk] Scroll  [1] Details  [2] Logs  [3] Events  [4] Stats  [q] Quit"
 	}
-	help := helpStyle.Render(helpText)
+	help := ui.HelpStyle.Render(helpText)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

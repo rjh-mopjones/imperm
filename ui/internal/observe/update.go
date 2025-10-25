@@ -1,12 +1,12 @@
 package observe
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"imperm-ui/pkg/models"
+	"imperm-ui/internal/config"
+	"imperm-ui/internal/messages"
 )
 
 func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -15,7 +15,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.width = msg.Width
 		t.height = msg.Height
 
-	case tickMsg:
+	case messages.TickMsg:
 		if t.autoRefresh {
 			// Reload resources and also reload current view data (logs, events, etc.)
 			return t, tea.Batch(t.loadResources, t.loadDataForCurrentView(), t.tick())
@@ -55,7 +55,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logsLoadedMsg:
 		// If the pod name changed, reset scroll to bottom for new pod
 		if t.lastPodName != "" && t.lastPodName != msg.podName {
-			t.scrollOffset = 999999 // Will be clamped to max in render
+			t.scrollOffset = config.ScrollToBottom
 		} else if t.lastPodName == msg.podName && t.currentLogs != "" {
 			// Same pod, check if we were at/near the bottom
 			oldLines := len(strings.Split(t.currentLogs, "\n"))
@@ -67,11 +67,11 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if t.scrollOffset >= maxOldOffset-5 {
 				// User was at/near bottom, scroll to new bottom
-				t.scrollOffset = 999999 // Will be clamped to max in render
+				t.scrollOffset = config.ScrollToBottom
 			}
 		} else {
 			// First load, scroll to bottom
-			t.scrollOffset = 999999 // Will be clamped to max in render
+			t.scrollOffset = config.ScrollToBottom
 		}
 		t.currentLogs = msg.logs
 		t.lastPodName = msg.podName
@@ -82,16 +82,13 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statsLoadedMsg:
 		t.currentStats = msg.stats
 
-	case errMsg:
+	case messages.ErrMsg:
 		// Display error as a status message
-		t.statusMessage = fmt.Sprintf("❌ Error: %v", msg.err)
-		t.statusType = "error"
-		t.statusTime = time.Now()
 		t.lastError = nil // Don't show full-screen error
 		t.isLoading = false // Stop loading on error
-		return t, t.clearStatusAfterDelay()
+		return t, t.setStatus("error", "❌ Error: %v", msg.Err)
 
-	case clearStatusMsg:
+	case messages.ClearStatusMsg:
 		// Clear the status message
 		t.statusMessage = ""
 		return t, nil
@@ -211,23 +208,13 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						resourceType = "environment"
 					}
 				case ResourcePods:
-					var pods []models.Pod
-					if t.selectedEnvironment != nil {
-						pods = t.selectedEnvironment.Pods
-					} else {
-						pods = t.pods
-					}
+					pods := t.getCurrentPods()
 					if t.selectedIndex < len(pods) {
 						resourceName = pods[t.selectedIndex].Name
 						resourceType = "pod"
 					}
 				case ResourceDeployments:
-					var deployments []models.Deployment
-					if t.selectedEnvironment != nil {
-						deployments = t.selectedEnvironment.Deployments
-					} else {
-						deployments = t.deployments
-					}
+					deployments := t.getCurrentDeployments()
 					if t.selectedIndex < len(deployments) {
 						resourceName = deployments[t.selectedIndex].Name
 						resourceType = "deployment"
@@ -236,12 +223,10 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Show success message immediately
 				if resourceName != "" {
-					t.statusMessage = fmt.Sprintf("✓ Deleted %s: %s", resourceType, resourceName)
-					t.statusType = "success"
-					t.statusTime = time.Now()
+					return t, tea.Batch(t.deleteSelectedResource(), t.setStatus("success", "✓ Deleted %s: %s", resourceType, resourceName))
 				}
 
-				return t, tea.Batch(t.deleteSelectedResource(), t.clearStatusAfterDelay())
+				return t, t.deleteSelectedResource()
 			}
 		case "1":
 			// Quick switch to Details view (without changing focus)
