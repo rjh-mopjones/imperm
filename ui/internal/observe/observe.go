@@ -588,3 +588,30 @@ func (t *Tab) loadDataForCurrentView() tea.Cmd {
 		return nil
 	}
 }
+
+func (t *Tab) GetHeaderInfo() string {
+	var resourceName string
+	switch t.currentResource {
+	case ResourceEnvironments:
+		resourceName = "Environments"
+	case ResourcePods:
+		if t.selectedEnvironment != nil {
+			resourceName = t.selectedEnvironment.Name + " > Pods"
+		} else {
+			resourceName = "Pods"
+		}
+	case ResourceDeployments:
+		if t.selectedEnvironment != nil {
+			resourceName = t.selectedEnvironment.Name + " > Deployments"
+		} else {
+			resourceName = "Deployments"
+		}
+	}
+
+	autoRefreshIndicator := ""
+	if t.autoRefresh {
+		autoRefreshIndicator = " [AUTO]"
+	}
+
+	return resourceName + autoRefreshIndicator + " | Last update: " + t.lastUpdate.Format("15:04:05")
+}

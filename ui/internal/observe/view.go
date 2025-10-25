@@ -24,12 +24,6 @@ func (t *Tab) View() string {
 	// Styles
 	cyanColor := lipgloss.Color("51")
 
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(cyanColor).
-		Background(lipgloss.Color("236")).
-		Padding(0, 1)
-
 	// Title color changes based on focus
 	titleColor := lipgloss.Color("245") // Grey when not focused
 	if t.panelFocus == FocusTable {
@@ -60,39 +54,16 @@ func (t *Tab) View() string {
 		Foreground(lipgloss.Color("241")).
 		Padding(1, 0)
 
-	// Header bar with breadcrumbs
+	// Get resource name for table title
 	var resourceName string
-	var breadcrumb string
 	switch t.currentResource {
 	case ResourceEnvironments:
 		resourceName = "Environments"
-		breadcrumb = "Environments"
 	case ResourcePods:
 		resourceName = "Pods"
-		if t.selectedEnvironment != nil {
-			breadcrumb = fmt.Sprintf("Environments > %s > Pods", t.selectedEnvironment.Name)
-		} else {
-			breadcrumb = "Pods"
-		}
 	case ResourceDeployments:
 		resourceName = "Deployments"
-		if t.selectedEnvironment != nil {
-			breadcrumb = fmt.Sprintf("Environments > %s > Deployments", t.selectedEnvironment.Name)
-		} else {
-			breadcrumb = "Deployments"
-		}
 	}
-
-	autoRefreshIndicator := ""
-	if t.autoRefresh {
-		autoRefreshIndicator = " [AUTO]"
-	}
-
-	header := headerStyle.Render(fmt.Sprintf(" %s%s | Last update: %s ",
-		breadcrumb,
-		autoRefreshIndicator,
-		t.lastUpdate.Format("15:04:05"),
-	))
 
 	// Build table
 	var content strings.Builder
@@ -177,7 +148,6 @@ func (t *Tab) View() string {
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		header,
 		mainContent,
 		help,
 	)

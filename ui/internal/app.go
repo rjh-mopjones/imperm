@@ -122,11 +122,35 @@ func (m *Model) View() string {
 		observeTabStyle = activeTabStyle
 	}
 
-	tabBar := lipgloss.JoinHorizontal(
+	tabs := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		controlTabStyle.Render(" Control "),
 		observeTabStyle.Render(" Observe "),
 	)
+
+	// Add observe info when on observe tab
+	var tabBarContent string
+	if m.currentTab == tabObserve && m.observeTab != nil {
+		infoStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Background(lipgloss.Color("235")).
+			Padding(0, 2).
+			MarginLeft(4)
+
+		observeInfo := m.observeTab.GetHeaderInfo()
+		tabBarContent = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			tabs,
+			infoStyle.Render(observeInfo),
+		)
+	} else {
+		tabBarContent = tabs
+	}
+
+	// Position tabs with left padding
+	tabBar := lipgloss.NewStyle().
+		PaddingLeft(4).
+		Render(tabBarContent)
 
 	// Content
 	var content string
