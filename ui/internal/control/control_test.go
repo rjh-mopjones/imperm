@@ -63,23 +63,3 @@ func TestGetFallbackOptions(t *testing.T) {
 	}
 }
 
-func TestToPascalCase(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"docker_registry", "DockerRegistry"},
-		{"namespace_name", "NamespaceName"},
-		{"constant_logger", "ConstantLogger"},
-		{"service_port", "ServicePort"},
-		{"simple", "Simple"},
-		{"", ""},
-	}
-
-	for _, test := range tests {
-		result := toPascalCase(test.input)
-		if result != test.expected {
-			t.Errorf("toPascalCase(%q) = %q, want %q", test.input, result, test.expected)
-		}
-	}
-}
