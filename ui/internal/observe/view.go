@@ -75,9 +75,10 @@ func (t *Tab) View() string {
 	}
 
 	// Create right panel with custom border
+	// Set width to match layout calculation - content is already wrapped inside
 	rightPanelStyled := lipgloss.NewStyle().
-		Width(layout.RightWidth - 4).
-		Height(t.height - 10).
+		Width(layout.RightWidth - 4). // Account for border (2) and padding (2)
+		MaxHeight(rightPanelHeight).  // Prevent box from growing in height
 		Padding(1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(rightBorderColor).
@@ -86,7 +87,7 @@ func (t *Tab) View() string {
 	// Create table panel
 	tablePanel := lipgloss.NewStyle().
 		Width(layout.LeftWidth - 2).
-		Height(layout.PanelHeight).
+		MaxHeight(layout.PanelHeight). // Use MaxHeight to prevent overflow
 		Padding(1).
 		Render(content.String())
 

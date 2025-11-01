@@ -32,17 +32,17 @@ const (
 )
 
 type Tab struct {
-	client           client.Client
-	currentResource  resourceType
-	environments     []models.Environment
-	pods             []models.Pod
-	deployments      []models.Deployment
-	selectedIndex    int
-	width            int
-	height           int
-	lastUpdate       time.Time
-	autoRefresh      bool
-	refreshInterval  time.Duration
+	client          client.Client
+	currentResource resourceType
+	environments    []models.Environment
+	pods            []models.Pod
+	deployments     []models.Deployment
+	selectedIndex   int
+	width           int
+	height          int
+	lastUpdate      time.Time
+	autoRefresh     bool
+	refreshInterval time.Duration
 
 	// Drill-down state
 	selectedEnvironment *models.Environment
@@ -56,11 +56,11 @@ type Tab struct {
 	scrollOffset int
 
 	// Right panel data
-	currentLogs         string
-	currentEvents       []models.Event
-	currentStats        *models.ResourceStats
-	lastPodName         string // Track last pod name for logs refresh
-	lastDeploymentName  string // Track last deployment name for events refresh
+	currentLogs        string
+	currentEvents      []models.Event
+	currentStats       *models.ResourceStats
+	lastPodName        string // Track last pod name for logs refresh
+	lastDeploymentName string // Track last deployment name for events refresh
 
 	// Error tracking
 	lastError error
@@ -72,6 +72,12 @@ type Tab struct {
 
 	// Loading state
 	isLoading bool
+
+	// Caching for performance
+	cachedWrappedContent string
+	cachedPanelWidth     int
+	cachedViewContent    string
+	cachedPanelView      rightPanelView
 }
 
 // Messages

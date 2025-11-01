@@ -8,10 +8,10 @@ const (
 	StatusMessageTimeout = 3 * time.Second
 
 	// LogPollingInterval is how often to poll for operation logs
-	LogPollingInterval = 500 * time.Millisecond
+	LogPollingInterval = 1 * time.Second // Reduced from 500ms to reduce CPU usage
 
 	// ResourceRefreshInterval is how often to refresh resource lists in observe tab
-	ResourceRefreshInterval = 5 * time.Second
+	ResourceRefreshInterval = 10 * time.Second // Increased from 5s to reduce API calls and CPU usage
 )
 
 // Layout constants

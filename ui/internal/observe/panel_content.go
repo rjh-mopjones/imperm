@@ -62,7 +62,62 @@ func (t *Tab) renderLogsView() string {
 		return "Loading logs..."
 	}
 
-	return t.currentLogs
+	// Split logs into lines and apply scrolling to prevent box overflow
+	logLines := strings.Split(t.currentLogs, "\n")
+
+	// Calculate available height for logs (accounting for panel header/footer)
+	// Panel height is t.height - 10, minus view list (4 lines), separator (1), title (1), padding (~2)
+	availableLines := t.height - 18
+	if availableLines < 5 {
+		availableLines = 5 // Minimum visible lines
+	}
+
+	// Calculate scroll window
+	totalLines := len(logLines)
+
+	// Handle scrollOffset = ScrollToBottom special case
+	var startIdx, endIdx int
+	if t.scrollOffset >= 999999 { // ScrollToBottom constant
+		// Show last N lines
+		if totalLines > availableLines {
+			startIdx = totalLines - availableLines
+		} else {
+			startIdx = 0
+		}
+		endIdx = totalLines
+	} else {
+		// Manual scrolling
+		startIdx = t.scrollOffset
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx > totalLines-availableLines {
+			startIdx = totalLines - availableLines
+		}
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		endIdx = startIdx + availableLines
+		if endIdx > totalLines {
+			endIdx = totalLines
+		}
+	}
+
+	// Build visible log window
+	var result strings.Builder
+	for i := startIdx; i < endIdx; i++ {
+		result.WriteString(logLines[i])
+		if i < endIdx-1 {
+			result.WriteString("\n")
+		}
+	}
+
+	// Add scroll indicator if there are more lines than visible
+	if totalLines > availableLines {
+		result.WriteString(fmt.Sprintf("\n[%d-%d/%d lines]", startIdx+1, endIdx, totalLines))
+	}
+
+	return result.String()
 }
 
 func (t *Tab) renderEventsView() string {
@@ -79,10 +134,26 @@ func (t *Tab) renderEventsView() string {
 		return "No events found"
 	}
 
+	// Calculate available lines to prevent box overflow
+	availableLines := t.height - 18
+	if availableLines < 5 {
+		availableLines = 5
+	}
+
+	// Limit events to fit in available space (each event is ~2 lines with wrapping)
+	maxEvents := availableLines / 2
+	if maxEvents < 1 {
+		maxEvents = 1
+	}
+
 	var events strings.Builder
+	eventsToShow := t.currentEvents
+	if len(eventsToShow) > maxEvents {
+		eventsToShow = eventsToShow[:maxEvents]
+	}
 
 	// Render events using theme colors
-	for _, event := range t.currentEvents {
+	for _, event := range eventsToShow {
 		eventColor := ui.ColorSuccess
 		if event.Type == "Warning" {
 			eventColor = ui.ColorWarning
@@ -94,6 +165,11 @@ func (t *Tab) renderEventsView() string {
 		// Format: "● Type  TimeAgo  Message"
 		events.WriteString(fmt.Sprintf("\033[38;5;%sm● %-8s\033[0m\033[38;5;%sm%s\033[0m  %s\n",
 			eventColor, event.Type, ui.ColorTextDim, timeAgo, event.Message))
+	}
+
+	// Show truncation indicator
+	if len(t.currentEvents) > maxEvents {
+		events.WriteString(fmt.Sprintf("\n[Showing %d of %d events]", maxEvents, len(t.currentEvents)))
 	}
 
 	return events.String()

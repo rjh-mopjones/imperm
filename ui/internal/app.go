@@ -79,12 +79,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 
-	// Forward all messages to both tabs
-	// Each tab will handle only the messages it cares about
-	_, cmd = m.controlTab.Update(msg)
-	cmds = append(cmds, cmd)
-	_, cmd = m.observeTab.Update(msg)
-	cmds = append(cmds, cmd)
+	// Performance optimization: Forward messages based on type
+	// TickMsg should only go to the active tab to reduce unnecessary processing
+	switch msg.(type) {
+	case tea.KeyMsg:
+		// Forward key messages to both tabs (for global shortcuts)
+		_, cmd = m.controlTab.Update(msg)
+		cmds = append(cmds, cmd)
+		_, cmd = m.observeTab.Update(msg)
+		cmds = append(cmds, cmd)
+	default:
+		// For other messages (including TickMsg), only forward to active tab
+		if m.currentTab == tabControl {
+			_, cmd = m.controlTab.Update(msg)
+			cmds = append(cmds, cmd)
+		} else {
+			_, cmd = m.observeTab.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+	}
 
 	return m, tea.Batch(cmds...)
 }

@@ -16,7 +16,15 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case operationLogsMsg:
 		if msg.logs != nil && msg.envName == t.currentOperation {
-			t.operationLogs = msg.logs.Logs
+			// Limit log buffer to prevent memory bloat from long-running operations
+			// Keep only the most recent 1000 log lines
+			const maxLogLines = 1000
+			logs := msg.logs.Logs
+			if len(logs) > maxLogLines {
+				// Keep the most recent logs
+				logs = logs[len(logs)-maxLogLines:]
+			}
+			t.operationLogs = logs
 			t.operationStatus = msg.logs.Status
 			// Logs are now persistent and won't be cleared automatically
 		}

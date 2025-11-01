@@ -17,8 +17,9 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.TickMsg:
 		if t.autoRefresh {
-			// Reload resources and also reload current view data (logs, events, etc.)
-			return t, tea.Batch(t.loadResources, t.loadDataForCurrentView(), t.tick())
+			// Only reload resources - current view data will be loaded after resources are loaded
+			// This avoids duplicate API calls
+			return t, tea.Batch(t.loadResources, t.tick())
 		}
 		return t, t.tick()
 
@@ -27,7 +28,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.pods = msg.pods
 		t.deployments = msg.deployments
 		t.lastUpdate = time.Now()
-		t.lastError = nil // Clear any previous errors
+		t.lastError = nil   // Clear any previous errors
 		t.isLoading = false // Data loaded successfully
 
 		// If we have a selected environment, update it with fresh data
@@ -49,8 +50,9 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Load stats and current view data after resources are loaded
-		return t, tea.Batch(t.loadStats(), t.loadDataForCurrentView())
+		// Only load data for current view after resources are loaded
+		// Stats will be loaded only when switching to Stats view
+		return t, t.loadDataForCurrentView()
 
 	case logsLoadedMsg:
 		// If the pod name changed, reset scroll to bottom for new pod
@@ -84,7 +86,7 @@ func (t *Tab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.ErrMsg:
 		// Display error as a status message
-		t.lastError = nil // Don't show full-screen error
+		t.lastError = nil   // Don't show full-screen error
 		t.isLoading = false // Stop loading on error
 		return t, t.setStatus("error", "❌ Error: %v", msg.Err)
 

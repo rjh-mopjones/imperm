@@ -5,11 +5,16 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"imperm-ui/internal/ui"
 )
 
 func (t *Tab) renderRightPanel(height int) string {
-	// Calculate panel width (we'll use this for line truncation)
-	panelWidth := (t.width / 2) - 8 // Half screen minus borders and padding
+	// Calculate actual content width accounting for border and padding
+	// The right panel style uses: Width(layout.RightWidth - 4) with Padding(1) and RoundedBorder()
+	// RoundedBorder adds 2 chars (left + right), Padding(1) adds 2 chars (left + right)
+	layout := ui.CalculateSplitLayout(t.width, t.height)
+	// Start with RightWidth - 4 (from style), then subtract border (2) and padding (2)
+	panelWidth := layout.RightWidth - 8
 	if panelWidth < 40 {
 		panelWidth = 40 // Minimum width to prevent issues
 	}
@@ -121,45 +126,56 @@ func (t *Tab) renderRightPanel(height int) string {
 		viewContent = t.renderStatsView()
 	}
 
-	// Apply scrolling
-	lines := strings.Split(viewContent, "\n")
+	// Hard wrap the content to prevent lipgloss from truncating it
+	// We need hard wrapping (character-based) not word wrapping for JSON
+	// Cache wrapped content to avoid expensive re-wrapping
+	var wrappedContent string
+	if viewContent == t.cachedViewContent && panelWidth == t.cachedPanelWidth && t.rightPanelView == t.cachedPanelView {
+		// Content and width haven't changed, use cached version
+		wrappedContent = t.cachedWrappedContent
+	} else {
+		// Content or width changed, re-wrap and cache
+		wrappedContent = hardWrap(viewContent, panelWidth)
+		t.cachedWrappedContent = wrappedContent
+		t.cachedPanelWidth = panelWidth
+		t.cachedViewContent = viewContent
+		t.cachedPanelView = t.rightPanelView
+	}
+	content.WriteString(wrappedContent)
 
-	// Calculate available height for content (subtract numbers, view list, separator, title)
-	availableHeight := height - 6
-	if availableHeight < 5 {
-		availableHeight = 5 // Minimum height to prevent issues
+	return content.String()
+}
+
+// hardWrap performs hard wrapping at character boundaries for content like JSON
+// Optimized version with pre-allocation and efficient string building
+func hardWrap(text string, width int) string {
+	if width <= 0 || text == "" {
+		return text
 	}
 
-	// Ensure scroll offset is within bounds
-	maxOffset := len(lines) - availableHeight
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
-	if t.scrollOffset > maxOffset {
-		t.scrollOffset = maxOffset
-	}
+	// Pre-calculate approximate result size to reduce allocations
+	// Estimate: original length + (number of lines we'll add * newline size)
+	estimatedWraps := len(text) / width
+	estimatedSize := len(text) + estimatedWraps
+	result := make([]byte, 0, estimatedSize)
 
-	// Get the visible lines
-	endLine := t.scrollOffset + availableHeight
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		// Process each line
+		for len(line) > width {
+			// Append width characters directly as bytes
+			result = append(result, line[:width]...)
+			result = append(result, '\n')
+			line = line[width:]
+		}
+		// Append remaining part of line
+		result = append(result, line...)
 
-	visibleLines := lines[t.scrollOffset:endLine]
-
-	// Ensure we don't exceed available height
-	if len(visibleLines) > availableHeight {
-		visibleLines = visibleLines[:availableHeight]
-	}
-
-	// Truncate each line to fit within panel width to prevent wrapping
-	for i, line := range visibleLines {
-		if len(line) > panelWidth {
-			visibleLines[i] = line[:panelWidth-3] + "..."
+		// Add newline between original lines (but not after the last one)
+		if i < len(lines)-1 {
+			result = append(result, '\n')
 		}
 	}
 
-	content.WriteString(strings.Join(visibleLines, "\n"))
-
-	return content.String()
+	return string(result)
 }
