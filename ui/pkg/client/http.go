@@ -98,10 +98,7 @@ func (c *HTTPClient) DestroyEnvironment(name string) error {
 
 // ListPods fetches all pods from the middleware API
 func (c *HTTPClient) ListPods(namespace string) ([]models.Pod, error) {
-	url := c.baseURL + "/api/pods"
-	if namespace != "" {
-		url += "?namespace=" + namespace
-	}
+	url := fmt.Sprintf("%s/api/k8s/%s/pods", c.baseURL, namespace)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -113,6 +110,8 @@ func (c *HTTPClient) ListPods(namespace string) ([]models.Pod, error) {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
+	// The upstream returns v1.PodList, we need to handle this
+	// For now, assuming the middleware transforms it to []models.Pod
 	var pods []models.Pod
 	if err := json.NewDecoder(resp.Body).Decode(&pods); err != nil {
 		return nil, fmt.Errorf("failed to decode pods: %w", err)
@@ -128,7 +127,7 @@ func (c *HTTPClient) ListPods(namespace string) ([]models.Pod, error) {
 
 // GetPodLogs fetches logs for a specific pod
 func (c *HTTPClient) GetPodLogs(namespace, podName string) (string, error) {
-	url := fmt.Sprintf("%s/api/pods/logs?namespace=%s&pod=%s", c.baseURL, namespace, podName)
+	url := fmt.Sprintf("%s/api/k8s/%s/logs?podName=%s&follow=false", c.baseURL, namespace, podName)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -140,19 +139,19 @@ func (c *HTTPClient) GetPodLogs(namespace, podName string) (string, error) {
 		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var result struct {
-		Logs string `json:"logs"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode logs: %w", err)
+	// The upstream is a flushwriter that writes logs directly
+	// Read the response body as plain text
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
+		return "", fmt.Errorf("failed to read logs: %w", err)
 	}
 
-	return result.Logs, nil
+	return buf.String(), nil
 }
 
 // GetPodEvents fetches events for a specific pod
 func (c *HTTPClient) GetPodEvents(namespace, podName string) ([]models.Event, error) {
-	url := fmt.Sprintf("%s/api/pods/events?namespace=%s&pod=%s", c.baseURL, namespace, podName)
+	url := fmt.Sprintf("%s/api/k8s/%s/events", c.baseURL, namespace)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -164,13 +163,22 @@ func (c *HTTPClient) GetPodEvents(namespace, podName string) ([]models.Event, er
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var events []models.Event
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+	// Upstream returns []EventTimeEntry, convert to []Event
+	var eventEntries []models.EventTimeEntry
+	if err := json.NewDecoder(resp.Body).Decode(&eventEntries); err != nil {
 		return nil, fmt.Errorf("failed to decode events: %w", err)
 	}
 
-	if events == nil {
-		events = []models.Event{}
+	// Convert EventTimeEntry to Event
+	events := make([]models.Event, 0, len(eventEntries))
+	for _, entry := range eventEntries {
+		events = append(events, models.Event{
+			Type:      entry.Type,
+			Reason:    entry.Reason,
+			Message:   entry.Message,
+			Timestamp: entry.LastObservedTime,
+			Count:     entry.Count,
+		})
 	}
 
 	return events, nil
@@ -178,7 +186,7 @@ func (c *HTTPClient) GetPodEvents(namespace, podName string) ([]models.Event, er
 
 // GetDeploymentEvents fetches events for a specific deployment
 func (c *HTTPClient) GetDeploymentEvents(namespace, deploymentName string) ([]models.Event, error) {
-	url := fmt.Sprintf("%s/api/deployments/events?namespace=%s&deployment=%s", c.baseURL, namespace, deploymentName)
+	url := fmt.Sprintf("%s/api/k8s/%s/events", c.baseURL, namespace)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -190,13 +198,22 @@ func (c *HTTPClient) GetDeploymentEvents(namespace, deploymentName string) ([]mo
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var events []models.Event
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+	// Upstream returns []EventTimeEntry, convert to []Event
+	var eventEntries []models.EventTimeEntry
+	if err := json.NewDecoder(resp.Body).Decode(&eventEntries); err != nil {
 		return nil, fmt.Errorf("failed to decode events: %w", err)
 	}
 
-	if events == nil {
-		events = []models.Event{}
+	// Convert EventTimeEntry to Event
+	events := make([]models.Event, 0, len(eventEntries))
+	for _, entry := range eventEntries {
+		events = append(events, models.Event{
+			Type:      entry.Type,
+			Reason:    entry.Reason,
+			Message:   entry.Message,
+			Timestamp: entry.LastObservedTime,
+			Count:     entry.Count,
+		})
 	}
 
 	return events, nil
@@ -229,10 +246,7 @@ func (c *HTTPClient) GetResourceStats(resourceType, namespace string) (*models.R
 
 // ListDeployments fetches all deployments from the middleware API
 func (c *HTTPClient) ListDeployments(namespace string) ([]models.Deployment, error) {
-	url := c.baseURL + "/api/deployments"
-	if namespace != "" {
-		url += "?namespace=" + namespace
-	}
+	url := fmt.Sprintf("%s/api/k8s/%s/deployments", c.baseURL, namespace)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -244,6 +258,8 @@ func (c *HTTPClient) ListDeployments(namespace string) ([]models.Deployment, err
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
+	// The upstream returns appsv1.DeploymentList
+	// For now, assuming the middleware transforms it to []models.Deployment
 	var deployments []models.Deployment
 	if err := json.NewDecoder(resp.Body).Decode(&deployments); err != nil {
 		return nil, fmt.Errorf("failed to decode deployments: %w", err)
@@ -255,6 +271,33 @@ func (c *HTTPClient) ListDeployments(namespace string) ([]models.Deployment, err
 	}
 
 	return deployments, nil
+}
+
+// GetPodMetrics fetches resource metrics for all pods in a namespace
+func (c *HTTPClient) GetPodMetrics(namespace string) ([]models.PodMetrics, error) {
+	url := fmt.Sprintf("%s/api/k8s/%s/metrics", c.baseURL, namespace)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch pod metrics: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var metrics []models.PodMetrics
+	if err := json.NewDecoder(resp.Body).Decode(&metrics); err != nil {
+		return nil, fmt.Errorf("failed to decode metrics: %w", err)
+	}
+
+	// Handle null response
+	if metrics == nil {
+		metrics = []models.PodMetrics{}
+	}
+
+	return metrics, nil
 }
 
 // GetEnvironmentHistory fetches the history of environment operations

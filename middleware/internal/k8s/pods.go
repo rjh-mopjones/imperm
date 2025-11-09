@@ -147,6 +147,85 @@ func (c *K8sClient) DeletePod(namespace, podName string) error {
 	})
 }
 
+// GetPodMetrics gets resource usage metrics for all pods in a namespace
+func (c *K8sClient) GetPodMetrics(namespace string) ([]models.PodMetrics, error) {
+	var podMetrics []models.PodMetrics
+
+	if c.metricsClient == nil {
+		return podMetrics, fmt.Errorf("metrics client not available")
+	}
+
+	// Get pod list to get resource limits
+	podList, err := c.clientset.CoreV1().Pods(namespace).List(c.ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods: %w", err)
+	}
+
+	// Get metrics from metrics-server
+	metricsList, err := c.metricsClient.MetricsV1beta1().PodMetricses(namespace).List(c.ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod metrics: %w", err)
+	}
+
+	// Create a map of pod limits for easy lookup
+	podLimits := make(map[string]struct {
+		cpuLimit    int64
+		memoryLimit int64
+	})
+
+	for _, pod := range podList.Items {
+		var totalCPULimit, totalMemoryLimit int64
+		for _, container := range pod.Spec.Containers {
+			if limit := container.Resources.Limits; limit != nil {
+				totalCPULimit += limit.Cpu().MilliValue()
+				totalMemoryLimit += limit.Memory().Value()
+			}
+		}
+		podLimits[pod.Name] = struct {
+			cpuLimit    int64
+			memoryLimit int64
+		}{cpuLimit: totalCPULimit, memoryLimit: totalMemoryLimit}
+	}
+
+	// Build metrics response
+	for _, podMetric := range metricsList.Items {
+		var totalCPU, totalMemory int64
+		for _, container := range podMetric.Containers {
+			totalCPU += container.Usage.Cpu().MilliValue()
+			totalMemory += container.Usage.Memory().Value()
+		}
+
+		limits, ok := podLimits[podMetric.Name]
+		if !ok {
+			// If we can't find limits, use 0
+			limits.cpuLimit = 0
+			limits.memoryLimit = 0
+		}
+
+		cpuUsedPercentage := 0.0
+		if limits.cpuLimit > 0 {
+			cpuUsedPercentage = float64(totalCPU) / float64(limits.cpuLimit) * 100
+		}
+
+		memoryUsedPercentage := 0.0
+		if limits.memoryLimit > 0 {
+			memoryUsedPercentage = float64(totalMemory) / float64(limits.memoryLimit) * 100
+		}
+
+		podMetrics = append(podMetrics, models.PodMetrics{
+			Name:                 podMetric.Name,
+			CPULimit:             fmt.Sprintf("%dm", limits.cpuLimit),
+			CPUUsed:              fmt.Sprintf("%dm", totalCPU),
+			CPUUsedPercentage:    cpuUsedPercentage,
+			MemoryLimit:          fmt.Sprintf("%dMi", limits.memoryLimit/(1024*1024)),
+			MemoryUsed:           fmt.Sprintf("%dMi", totalMemory/(1024*1024)),
+			MemoryUsedPercentage: memoryUsedPercentage,
+		})
+	}
+
+	return podMetrics, nil
+}
+
 // int64Ptr is a helper to get pointer to int64
 func int64Ptr(i int64) *int64 {
 	return &i

@@ -328,3 +328,24 @@ func (m *MockClient) DeleteDeployment(namespace, deploymentName string) error {
 	}
 	return fmt.Errorf("deployment %s not found in namespace %s", deploymentName, namespace)
 }
+
+func (m *MockClient) GetPodMetrics(namespace string) ([]models.PodMetrics, error) {
+	// Return mock metrics for pods in the namespace
+	var metrics []models.PodMetrics
+	for _, env := range m.environments {
+		if namespace == "" || env.Namespace == namespace {
+			for _, pod := range env.Pods {
+				metrics = append(metrics, models.PodMetrics{
+					Name:                 pod.Name,
+					CPULimit:             "500m",
+					CPUUsed:              pod.CPU,
+					CPUUsedPercentage:    30.0, // Mock percentage
+					MemoryLimit:          "512Mi",
+					MemoryUsed:           pod.Memory,
+					MemoryUsedPercentage: 50.0, // Mock percentage
+				})
+			}
+		}
+	}
+	return metrics, nil
+}

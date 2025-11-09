@@ -51,6 +51,28 @@ type Event struct {
 	Count     int       // Number of times this event occurred
 }
 
+// EventTimeEntry represents a Kubernetes event with time tracking
+type EventTimeEntry struct {
+	Type              string    `json:"type"`
+	Reason            string    `json:"reason"`
+	From              string    `json:"from"`
+	Message           string    `json:"message"`
+	Count             int       `json:"count"`
+	FirstObservedTime time.Time `json:"firstObservedTime"`
+	LastObservedTime  time.Time `json:"lastObservedTime"`
+}
+
+// PodMetrics represents resource usage metrics for a pod
+type PodMetrics struct {
+	Name                 string  `json:"name"`
+	CPULimit             string  `json:"cpuLimit"`
+	CPUUsed              string  `json:"cpuUsed"`
+	CPUUsedPercentage    float64 `json:"cpuUsedPercentage"`
+	MemoryLimit          string  `json:"memoryLimit"`
+	MemoryUsed           string  `json:"memoryUsed"`
+	MemoryUsedPercentage float64 `json:"memoryUsedPercentage"`
+}
+
 // ResourceStats represents statistics for a resource
 type ResourceStats struct {
 	// Common stats

@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"imperm/internal/models"
+	"imperm-middleware/internal/models"
 )
 
 // HTTPClient implements the Client interface for a real middleware API

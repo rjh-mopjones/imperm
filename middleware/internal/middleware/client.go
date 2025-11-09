@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"imperm/internal/models"
+	"imperm-middleware/internal/models"
 )
 
 // Client defines the interface for interacting with the Kubernetes middleware

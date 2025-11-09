@@ -22,6 +22,9 @@ type Client interface {
 	GetDeploymentEvents(namespace, deploymentName string) ([]models.Event, error)
 	DeleteDeployment(namespace, deploymentName string) error
 
+	// Metrics operations
+	GetPodMetrics(namespace string) ([]models.PodMetrics, error)
+
 	// Stats operations
 	GetResourceStats(resourceType, namespace string) (*models.ResourceStats, error)
 

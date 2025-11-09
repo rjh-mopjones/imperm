@@ -13,9 +13,9 @@ import (
 // TerraformClient implements the client.Client interface using Terraform for provisioning
 // and Kubernetes API for querying
 type TerraformClient struct {
-	baseDir    string // Base directory for terraform environments
-	modulePath string // Path to the k8s-namespace module
-	kubeconfig string // Path to kubeconfig file
+	baseDir    string         // Base directory for terraform environments
+	modulePath string         // Path to the k8s-namespace module
+	kubeconfig string         // Path to kubeconfig file
 	k8sClient  *k8s.K8sClient // Embedded K8s client for read operations
 }
 
@@ -188,6 +188,11 @@ func (c *TerraformClient) GetDeploymentEvents(namespace, deploymentName string) 
 // DeleteDeployment deletes a deployment using Kubernetes API
 func (c *TerraformClient) DeleteDeployment(namespace, deploymentName string) error {
 	return c.k8sClient.DeleteDeployment(namespace, deploymentName)
+}
+
+// GetPodMetrics gets pod metrics using Kubernetes API
+func (c *TerraformClient) GetPodMetrics(namespace string) ([]models.PodMetrics, error) {
+	return c.k8sClient.GetPodMetrics(namespace)
 }
 
 // GetResourceStats gets resource statistics using Kubernetes API
